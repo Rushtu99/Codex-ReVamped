@@ -1,0 +1,8 @@
+.DS_Store
+*.bak
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.env
+tmp/

@@ -1,0 +1,32 @@
+# Managed by codex-portable-setup.
+# Local auth, sessions, logs, and caches stay outside Git.
+
+model = "gpt-5.4"
+model_reasoning_effort = "xhigh"
+personality = "pragmatic"
+model_provider = "codex-lb"
+approvals_reviewer = "user"
+plan_mode_reasoning_effort = "medium"
+
+[model_providers.codex-lb]
+name = "OpenAI"
+base_url = "http://127.0.0.1:2455/backend-api/codex"
+wire_api = "responses"
+supports_websockets = true
+requires_openai_auth = true
+
+[projects."__HOME_PATH__"]
+trust_level = "trusted"
+
+[notice]
+hide_full_access_warning = true
+
+[plugins."build-web-apps@openai-curated"]
+enabled = true
+
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "current-dir", "project-root", "git-branch", "context-used"]
+theme = "monokai-extended"
+
+[features]
+js_repl = true
