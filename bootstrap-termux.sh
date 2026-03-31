@@ -5,6 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 install_script="${script_dir}/install.sh"
 doctor_script="${script_dir}/doctor.sh"
 import_accounts_script="${script_dir}/import-accounts.py"
+ui_overlay_script="${script_dir}/apply-ui-overlay.sh"
 env_file="${HOME}/.codex-lb/.env"
 env_example_file="${HOME}/.codex-lb/.env.example"
 launcher_file="${HOME}/.local/bin/codex-lb-start"
@@ -155,6 +156,7 @@ require_termux
 ensure_pkg git
 ensure_pkg uv
 ensure_pkg python
+ensure_pkg nodejs
 ensure_pkg rust
 ensure_pkg clang
 ensure_pkg pkg-config
@@ -164,6 +166,8 @@ ensure_pkg libffi
 require_command git
 require_command uv
 require_command python
+require_command node
+require_command npm
 
 if ! command -v codex >/dev/null 2>&1; then
   fail "Codex CLI is not installed yet. Install the real codex binary first, then rerun this script."
@@ -179,6 +183,9 @@ else
 fi
 
 ensure_env_override
+
+say "Applying CodexLB ReVamped UI"
+"${ui_overlay_script}"
 
 say "Running portability doctor"
 "${doctor_script}"

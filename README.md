@@ -8,6 +8,7 @@ This package versions only the setup layer:
 - `~/.codex/config.toml`
 - `~/.codex-lb/.env.example`
 - `~/.codex-portable-setup/accounts.seed.json`
+- the `CodexLB ReVamped` frontend overlay under `overlays/codex-lb/`
 - pinned `codex-lb` install metadata
 - install and verification scripts
 
@@ -28,6 +29,7 @@ It does not version:
 - the `codex-lb` dashboard is exposed on your LAN at `http://PHONE_IP:2455/`
 - saved `codex-lb` accounts stay in `~/.codex-lb/store.db`
 - saved `codex-lb` accounts can also be reseeded from `~/.codex-portable-setup/accounts.seed.json`
+- the upstream frontend is reskinned as `CodexLB ReVamped`
 
 ## One-Command Bootstrap
 
@@ -43,6 +45,8 @@ That script:
 - installs required Termux packages if missing
 - runs the managed installer only when the wrapper/runtime/config layer is missing or stale
 - forces `HOST=0.0.0.0` and `PORT=2455` in `~/.codex-lb/.env`
+- applies the tracked `CodexLB ReVamped` frontend overlay
+- builds the frontend inside `~/.local/src/codex-lb/frontend` with `npm`
 - runs `./doctor.sh`
 - starts `codex-lb` only if it is not already running
 - imports saved accounts from `accounts.seed.json` as the final managed data step
@@ -63,6 +67,29 @@ It skips a full reinstall when all of these are already correct:
 - `~/.codex-lb/.env.example` exists
 
 It still repairs the live `~/.codex-lb/.env` listener settings and runs the doctor checks on every run.
+
+## UI Maintenance
+
+### Automated
+
+`bootstrap-termux.sh` now includes the UI step automatically. If you rerun bootstrap, it reapplies the tracked ReVamped frontend before validating the install.
+
+### Manual UI-only update
+
+If `codex-lb` is already installed and you only want to refresh the UI:
+
+```sh
+cd ~/.codex-portable-setup
+./apply-ui-overlay.sh
+```
+
+That script:
+
+- copies the tracked overlay files from `overlays/codex-lb/` into `~/.local/src/codex-lb`
+- installs frontend dependencies with `npm`
+- rebuilds the production frontend
+
+This path is intended for people who do not want to reinstall the wrapper/runtime setup and only want the latest `CodexLB ReVamped` UI.
 
 ## Exact Install Steps
 
@@ -97,6 +124,17 @@ The installer:
 - installs the managed launcher into `~/.local/bin/codex-lb-start`
 - writes `~/.codex/config.toml`
 - writes `~/.codex-lb/.env.example`
+
+### 2a. Apply the UI manually if you are not using bootstrap
+
+If you are doing a manual install instead of bootstrap, run:
+
+```sh
+cd ~/.codex-portable-setup
+./apply-ui-overlay.sh
+```
+
+This is the step that turns the upstream `codex-lb` frontend into `CodexLB ReVamped`.
 
 ### 3. Make sure your PATH prefers the managed wrapper
 
@@ -248,6 +286,7 @@ Run these on the phone:
 ```sh
 cd ~/.codex-portable-setup
 ./doctor.sh
+./apply-ui-overlay.sh
 command -v codex
 pgrep -af '[/]codex-lb( |$)'
 python - <<'PY'
@@ -295,6 +334,17 @@ Make sure:
 - `HOST=0.0.0.0`
 - `PORT=2455`
 - you are using the phone Wi‑Fi IP on the PC
+
+### The UI looks like upstream `codex-lb` instead of `CodexLB ReVamped`
+
+Run:
+
+```sh
+cd ~/.codex-portable-setup
+./apply-ui-overlay.sh
+```
+
+Then hard-refresh the browser. The active frontend source is `~/.local/src/codex-lb/frontend`, and the built assets are emitted to `~/.local/src/codex-lb/app/static`.
 
 ### Saved accounts disappeared
 
