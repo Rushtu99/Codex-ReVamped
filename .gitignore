@@ -5,4 +5,8 @@
 *.sqlite-shm
 *.sqlite-wal
 .env
+__pycache__/
+*.pyc
+accounts.seed.json
+runtime.env
 tmp/

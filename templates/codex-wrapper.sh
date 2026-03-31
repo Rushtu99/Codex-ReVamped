@@ -31,7 +31,7 @@ fi
 
 mkdir -p "${lb_dir}"
 
-export HOST="${HOST:-${CODEX_HOST_DEFAULT:-0.0.0.0}}"
+export HOST="${HOST:-${CODEX_HOST_DEFAULT:-127.0.0.1}}"
 export PORT="${PORT:-${CODEX_PORT_DEFAULT:-2455}}"
 
 if ! pgrep -f "[/]codex-lb( |$)" >/dev/null 2>&1; then

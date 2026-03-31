@@ -6,6 +6,7 @@ codex_config="${HOME}/.codex/config.toml"
 lb_env_example="${HOME}/.codex-lb/.env.example"
 wrapper="${HOME}/bin/codex"
 launcher="${HOME}/.local/bin/codex-lb-start"
+accounts_bundle="${HOME}/.codex-portable-setup/accounts.seed.json"
 
 ok() {
   printf 'OK: %s\n' "$*"
@@ -41,6 +42,12 @@ for path in "${runtime_env}" "${codex_config}" "${lb_env_example}" "${wrapper}" 
     warn "file missing: ${path}"
   fi
 done
+
+if [ -f "${accounts_bundle}" ]; then
+  ok "managed account bundle present: ${accounts_bundle}"
+else
+  warn "managed account bundle missing: ${accounts_bundle}"
+fi
 
 if [ -f "${runtime_env}" ]; then
   # shellcheck disable=SC1090

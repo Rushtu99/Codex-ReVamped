@@ -15,15 +15,16 @@ fi
 target_bin_dir="${HOME}/bin"
 launcher_dir="${HOME}/.local/bin"
 managed_source_dir="${HOME}/.local/src/codex-lb"
+portable_dir="${HOME}/.codex-portable-setup"
+uv_cache_dir="${portable_dir}/uv-cache"
 codex_dir="${HOME}/.codex"
 lb_dir="${HOME}/.codex-lb"
-runtime_dir="${HOME}/.codex-portable-setup"
-runtime_env="${runtime_dir}/runtime.env"
+runtime_env="${portable_dir}/runtime.env"
 codex_config_file="${codex_dir}/config.toml"
 lb_env_example_file="${lb_dir}/.env.example"
 wrapper_file="${target_bin_dir}/codex"
 launcher_file="${launcher_dir}/codex-lb-start"
-profile_managed_line='export PATH="$HOME/bin:$PATH"'
+profile_managed_line='export PATH="$HOME/bin:$HOME/.local/bin:$PATH"'
 
 say() {
   printf '%s\n' "$*"
@@ -45,7 +46,6 @@ detect_platform() {
     printf '%s\n' "termux"
     return 0
   fi
-
   printf '%s\n' "posix"
 }
 
@@ -64,14 +64,17 @@ is_wrapper_candidate() {
 }
 
 resolve_real_codex() {
-  if [ -f "${runtime_env}" ]; then
-    # shellcheck disable=SC1090
-    . "${runtime_env}"
-    if [ -n "${CODEX_REAL_BIN:-}" ] && [ -x "${CODEX_REAL_BIN}" ] && [ "${CODEX_REAL_BIN}" != "${wrapper_file}" ]; then
-      printf '%s\n' "${CODEX_REAL_BIN}"
+  for candidate in \
+    /data/data/com.termux/files/usr/bin/codex \
+    /opt/homebrew/bin/codex \
+    /usr/local/bin/codex \
+    /usr/bin/codex
+  do
+    if [ -x "${candidate}" ] && [ "${candidate}" != "${wrapper_file}" ] && ! is_wrapper_candidate "${candidate}"; then
+      printf '%s\n' "${candidate}"
       return 0
     fi
-  fi
+  done
 
   if command -v which >/dev/null 2>&1; then
     candidates=$(which -a codex 2>/dev/null | awk '!seen[$0]++' || true)
@@ -87,36 +90,19 @@ EOF
     fi
   fi
 
-  for candidate in \
-    /data/data/com.termux/files/usr/bin/codex \
-    /opt/homebrew/bin/codex \
-    /usr/local/bin/codex \
-    /usr/bin/codex
-  do
-    if [ -x "${candidate}" ] && [ "${candidate}" != "${wrapper_file}" ] && ! is_wrapper_candidate "${candidate}"; then
-      printf '%s\n' "${candidate}"
-      return 0
-    fi
-  done
-
   fail "Could not resolve the real codex binary. Install Codex first, or remove the managed wrapper from PATH and re-run install.sh."
 }
 
 resolve_codex_lb_bin() {
+  if [ -x "${HOME}/.local/bin/codex-lb" ]; then
+    printf '%s\n' "${HOME}/.local/bin/codex-lb"
+    return 0
+  fi
+
   if command -v codex-lb >/dev/null 2>&1; then
     command -v codex-lb
     return 0
   fi
-
-  for candidate in \
-    "${HOME}/.local/bin/codex-lb" \
-    "${HOME}/bin/codex-lb"
-  do
-    if [ -x "${candidate}" ]; then
-      printf '%s\n' "${candidate}"
-      return 0
-    fi
-  done
 
   tool_dir=$(uv tool dir 2>/dev/null || true)
   if [ -n "${tool_dir}" ]; then
@@ -172,11 +158,6 @@ ensure_path_block() {
       } >> "${profile}"
     fi
   done
-
-  case ":${PATH}:" in
-    *":${target_bin_dir}:"*) ;;
-    *) say "Added ${target_bin_dir} to your shell profile. Restart your shell after install." ;;
-  esac
 }
 
 backup_if_needed() {
@@ -211,7 +192,8 @@ require_command sed
 require_command pgrep
 
 platform=$(detect_platform)
-mkdir -p "${target_bin_dir}" "${launcher_dir}" "${codex_dir}" "${lb_dir}" "${runtime_dir}"
+mkdir -p "${target_bin_dir}" "${launcher_dir}" "${codex_dir}" "${lb_dir}" "${portable_dir}" "${uv_cache_dir}"
+export UV_CACHE_DIR="${uv_cache_dir}"
 
 real_codex=$(resolve_real_codex)
 say "Using codex binary: ${real_codex}"
@@ -256,4 +238,5 @@ cp "${script_dir}/templates/codex-lb.env.example" "${lb_env_example_file}"
 ensure_path_block
 
 say "Install complete."
+say "Existing codex-lb state is preserved in ${lb_dir}."
 say "Next: copy ${lb_env_example_file} to ${lb_dir}/.env if you need overrides, then run ${wrapper_file}."

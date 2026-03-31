@@ -27,7 +27,7 @@ if [ -z "${launcher}" ] || [ ! -x "${launcher}" ]; then
   exit 1
 fi
 
-export HOST="${HOST:-${CODEX_HOST_DEFAULT:-0.0.0.0}}"
+export HOST="${HOST:-${CODEX_HOST_DEFAULT:-127.0.0.1}}"
 export PORT="${PORT:-${CODEX_PORT_DEFAULT:-2455}}"
 
 exec "${launcher}" "$@"
