@@ -43,6 +43,11 @@ Load balancer for ChatGPT accounts. Pool multiple accounts, track usage, manage 
 </tr>
 </table>
 
+## Dashboard and OMX
+
+- The Dashboard combines a compact `H/W/L/A` account-health summary, local-model stats, a scrollable `Account` section with search/filter/sort controls, per-account `5m/15m/1h/1d` usage chips, and request traffic.
+- The OMX tab shows install status, version, reasoning level, last-checked time, session and worker counts, quick workflow references, live session and worker tables, token analytics, allowlisted command controls, and command output.
+
 ## Quick Start
 
 ```bash
@@ -312,6 +317,17 @@ docker compose watch
 uv sync && cd frontend && bun install && cd ..
 uv run fastapi run app/main.py --reload        # backend :2455
 cd frontend && bun run dev                     # frontend :5173
+```
+
+## Validation
+
+Verified with the following commands for the refreshed dashboard, account monitoring, and OMX surfaces:
+
+```bash
+uv run pytest tests/integration/test_dashboard_overview.py tests/integration/test_omx_api.py
+cd frontend && bun run test -- src/__integration__/dashboard-flow.test.tsx src/__integration__/omx-flow.test.tsx
+cd frontend && bun run build
+openspec validate --specs
 ```
 
 ## Contributors ✨

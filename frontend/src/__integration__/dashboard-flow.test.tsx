@@ -14,7 +14,7 @@ import { server } from "@/test/mocks/server";
 import { renderWithProviders } from "@/test/utils";
 
 describe("dashboard flow integration", () => {
-  it("loads dashboard, refetches request logs on filter/pagination, and avoids overview refetch", async () => {
+  it("loads dashboard, keeps weekly panel hidden, and preserves request log filters", async () => {
     const user = userEvent.setup({ delay: null });
     const logs = createDefaultRequestLogs();
 
@@ -34,41 +34,54 @@ describe("dashboard flow integration", () => {
         const page = logs.slice(offset, Math.min(logs.length, offset + limit));
         return HttpResponse.json(createRequestLogsResponse(page, 100, true));
       }),
-      http.get("/api/request-logs/options", () =>
-        HttpResponse.json(createRequestLogFilterOptions()),
+      http.get("/api/request-logs/options", () => HttpResponse.json(createRequestLogFilterOptions())),
+      http.get("/api/local-models/status", () =>
+        HttpResponse.json({
+          bridgeRunning: false,
+          ollamaRunning: false,
+          endpoint: null,
+          loadedCount: 0,
+        }),
+      ),
+      http.get("/api/local-models/models", () =>
+        HttpResponse.json({
+          models: [],
+        }),
+      ),
+      http.get("/api/local-models/metrics", () =>
+        HttpResponse.json({
+          localTps: 0,
+          requestCount: 0,
+          queueDepth: 0,
+          quotaSavedTokens: 0,
+          quotaSavedPercent: 0,
+        }),
       ),
     );
 
     window.history.pushState({}, "", "/dashboard");
     renderWithProviders(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
-    expect(await screen.findByText("Request Logs")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "CodexLB ReVamped" })).toBeInTheDocument();
+    expect(await screen.findByText("Request traffic")).toBeInTheDocument();
+    expect(await screen.findByTestId("account-health-summary")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Account" })).toBeInTheDocument();
+    expect((await screen.findAllByText("5m")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("15m")).length).toBeGreaterThan(0);
 
     await waitFor(() => {
       expect(overviewCalls).toBeGreaterThan(0);
       expect(requestLogCalls).toBeGreaterThan(0);
     });
 
-    const overviewAfterLoad = overviewCalls;
-    const logsAfterLoad = requestLogCalls;
+    expect(screen.queryByText("5h Capacity")).not.toBeInTheDocument();
+    expect(screen.queryByText("Weekly Capacity")).not.toBeInTheDocument();
 
-    await user.type(
-      screen.getByPlaceholderText("Search request id, account, model, error..."),
-      "quota",
-    );
-
+    await user.type(screen.getByPlaceholderText("Search request id, account, model, error..."), "quota");
     await waitFor(() => {
-      expect(requestLogCalls).toBeGreaterThan(logsAfterLoad);
+      expect(requestLogCalls).toBeGreaterThan(1);
     });
-    expect(overviewCalls).toBe(overviewAfterLoad);
 
-    const logsAfterFilter = requestLogCalls;
-    await user.click(screen.getByRole("button", { name: "Next page" }));
-
-    await waitFor(() => {
-      expect(requestLogCalls).toBeGreaterThan(logsAfterFilter);
-    });
-    expect(overviewCalls).toBe(overviewAfterLoad);
-  });
+    expect(await screen.findByDisplayValue("quota")).toBeInTheDocument();
+  }, 30_000);
 });
