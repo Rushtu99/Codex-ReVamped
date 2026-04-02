@@ -1,5 +1,6 @@
-# Managed by Codex-ReVamped.
-# Local auth, sessions, logs, and caches stay outside Git.
+# Managed by Codex-ReVamped (OMX profile).
+# This keeps Codex pointed at the local codex-lb proxy and makes OMX the
+# supported workflow layer for Codex sessions.
 
 model = "gpt-5.4"
 model_reasoning_effort = "medium"

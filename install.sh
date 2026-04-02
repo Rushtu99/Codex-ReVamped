@@ -15,7 +15,8 @@ fi
 target_bin_dir="${HOME}/bin"
 launcher_dir="${HOME}/.local/bin"
 managed_source_dir="${HOME}/.local/src/codex-lb"
-portable_dir="${HOME}/.codex-portable-setup"
+portable_dir="${HOME}/.codex-revamped"
+legacy_portable_dir="${HOME}/.codex-portable-setup"
 uv_cache_dir="${portable_dir}/uv-cache"
 codex_dir="${HOME}/.codex"
 lb_dir="${HOME}/.codex-lb"
@@ -23,11 +24,17 @@ runtime_env="${portable_dir}/runtime.env"
 codex_config_file="${codex_dir}/config.toml"
 lb_env_example_file="${lb_dir}/.env.example"
 wrapper_file="${target_bin_dir}/codex"
-launcher_file="${launcher_dir}/codex-lb-start"
+launcher_file="${launcher_dir}/codex-revamped-start"
+launcher_alias_file="${launcher_dir}/codex-lb-start"
+sync_file="${launcher_dir}/codex-account-sync"
 profile_managed_line='export PATH="$HOME/bin:$HOME/.local/bin:$PATH"'
 
 say() {
   printf '%s\n' "$*"
+}
+
+warn() {
+  printf 'WARN: %s\n' "$*" >&2
 }
 
 fail() {
@@ -38,6 +45,66 @@ fail() {
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     fail "Required command not found: $1"
+  fi
+}
+
+npm_install_package_with_local_fallback() {
+  package_name=$1
+  if npm install -g "${package_name}" >/dev/null 2>&1; then
+    return 0
+  fi
+  warn "Global npm install failed for ${package_name}; trying user prefix"
+  npm install --prefix "${HOME}/.local" "${package_name}" >/dev/null 2>&1
+}
+
+ensure_omx_wrappers() {
+  omx_bin=""
+  for candidate in \
+    "/data/data/com.termux/files/usr/lib/node_modules/oh-my-codex/dist/cli/omx.js" \
+    "${HOME}/.local/lib/node_modules/oh-my-codex/dist/cli/omx.js"
+  do
+    if [ -f "${candidate}" ]; then
+      omx_bin="${candidate}"
+      break
+    fi
+  done
+
+  if [ -z "${omx_bin}" ]; then
+    return 1
+  fi
+
+  mkdir -p "${launcher_dir}"
+  cat > "${launcher_dir}/omx" <<EOF
+#!/bin/sh
+set -eu
+exec node "${omx_bin}" "\$@"
+EOF
+  chmod 755 "${launcher_dir}/omx"
+
+  cat > "${launcher_dir}/oh-my-codex" <<EOF
+#!/bin/sh
+set -eu
+exec node "${omx_bin}" "\$@"
+EOF
+  chmod 755 "${launcher_dir}/oh-my-codex"
+  return 0
+}
+
+install_omx_if_possible() {
+  if command -v omx >/dev/null 2>&1 && omx --help >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! command -v npm >/dev/null 2>&1; then
+    warn "npm is not available; skipping OMX install"
+    return 0
+  fi
+
+  say "Installing oh-my-codex (OMX)"
+  if npm_install_package_with_local_fallback oh-my-codex; then
+    ensure_omx_wrappers || true
+  else
+    warn "oh-my-codex install failed; continuing without OMX wrappers"
   fi
 }
 
@@ -56,7 +123,7 @@ is_wrapper_candidate() {
     return 1
   fi
 
-  if grep -E 'codex-lb-start|real_codex=|codex-portable-setup runtime metadata' "${candidate}" >/dev/null 2>&1; then
+  if grep -E 'codex-revamped-start|codex-lb-start|real_codex=|runtime metadata' "${candidate}" >/dev/null 2>&1; then
     return 0
   fi
 
@@ -180,8 +247,20 @@ backup_if_needed() {
 render_config() {
   rendered_file=$1
   home_path_escaped=$(printf '%s' "${HOME}" | sed 's/[\/&]/\\&/g')
-  sed "s/__HOME_PATH__/${home_path_escaped}/g" \
+  sed "s#__HOME_PATH__#${home_path_escaped}#g" \
     "${script_dir}/templates/codex-config.toml.tmpl" > "${rendered_file}"
+}
+
+migrate_legacy_portable_state() {
+  mkdir -p "${portable_dir}"
+
+  if [ -d "${legacy_portable_dir}" ] && [ ! -f "${runtime_env}" ] && [ -f "${legacy_portable_dir}/runtime.env" ]; then
+    cp "${legacy_portable_dir}/runtime.env" "${runtime_env}"
+  fi
+
+  if [ -d "${legacy_portable_dir}" ] && [ ! -f "${portable_dir}/accounts.seed.json" ] && [ -f "${legacy_portable_dir}/accounts.seed.json" ]; then
+    cp "${legacy_portable_dir}/accounts.seed.json" "${portable_dir}/accounts.seed.json"
+  fi
 }
 
 require_command git
@@ -190,10 +269,13 @@ require_command codex
 require_command awk
 require_command sed
 require_command pgrep
+require_command node
 
 platform=$(detect_platform)
 mkdir -p "${target_bin_dir}" "${launcher_dir}" "${codex_dir}" "${lb_dir}" "${portable_dir}" "${uv_cache_dir}"
 export UV_CACHE_DIR="${uv_cache_dir}"
+
+migrate_legacy_portable_state
 
 real_codex=$(resolve_real_codex)
 say "Using codex binary: ${real_codex}"
@@ -202,19 +284,26 @@ say "Installing codex-lb from ${CODEX_LB_GIT_URL}@${CODEX_LB_REF}"
 install_codex_lb "${platform}"
 codex_lb_bin=$(resolve_codex_lb_bin)
 
+install_omx_if_possible
+omx_bin="$(command -v omx 2>/dev/null || true)"
+
 tmp_runtime="${runtime_env}.tmp"
 cat > "${tmp_runtime}" <<EOF
 PACKAGE_NAME=${PACKAGE_NAME}
 PACKAGE_VERSION=${PACKAGE_VERSION}
 PACKAGE_SLUG=${PACKAGE_SLUG}
+CODEX_PORTABLE_DIR=${script_dir}
+CODEX_RUNTIME_ENV=${runtime_env}
 CODEX_REAL_BIN=${real_codex}
 CODEX_LB_BIN=${codex_lb_bin}
 CODEX_LB_LAUNCHER=${launcher_file}
+CODEX_ACCOUNT_SYNCER=${sync_file}
 CODEX_LB_SOURCE_DIR=${managed_source_dir}
 CODEX_LB_DIR=${lb_dir}
 CODEX_LB_ENV_FILE=${lb_dir}/.env
 CODEX_HOST_DEFAULT=${DEFAULT_HOST}
 CODEX_PORT_DEFAULT=${DEFAULT_PORT}
+CODEX_OMX_BIN=${omx_bin}
 EOF
 backup_if_needed "${runtime_env}" "${tmp_runtime}"
 mv "${tmp_runtime}" "${runtime_env}"
@@ -228,6 +317,17 @@ backup_if_needed "${launcher_file}" "${script_dir}/templates/codex-lb-start.sh"
 cp "${script_dir}/templates/codex-lb-start.sh" "${launcher_file}"
 chmod 700 "${launcher_file}"
 
+cat > "${launcher_alias_file}" <<EOF
+#!/bin/sh
+set -eu
+exec "${launcher_file}" "\$@"
+EOF
+chmod 700 "${launcher_alias_file}"
+
+backup_if_needed "${sync_file}" "${script_dir}/templates/codex-account-sync.py"
+cp "${script_dir}/templates/codex-account-sync.py" "${sync_file}"
+chmod 700 "${sync_file}"
+
 backup_if_needed "${wrapper_file}" "${script_dir}/templates/codex-wrapper.sh"
 cp "${script_dir}/templates/codex-wrapper.sh" "${wrapper_file}"
 chmod 700 "${wrapper_file}"
@@ -238,5 +338,6 @@ cp "${script_dir}/templates/codex-lb.env.example" "${lb_env_example_file}"
 ensure_path_block
 
 say "Install complete."
-say "Existing codex-lb state is preserved in ${lb_dir}."
-say "Next: copy ${lb_env_example_file} to ${lb_dir}/.env if you need overrides, then run ${wrapper_file}."
+say "Standalone launcher: ${launcher_file}"
+say "Compatibility alias: ${launcher_alias_file}"
+say "Managed wrapper: ${wrapper_file}"

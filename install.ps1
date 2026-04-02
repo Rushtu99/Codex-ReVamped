@@ -34,6 +34,27 @@ function Require-Command {
     }
 }
 
+function Install-OmxIfPossible {
+    $npm = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npm) {
+        Write-Warning "npm not found; skipping OMX install"
+        return $null
+    }
+
+    if (Get-Command omx -ErrorAction SilentlyContinue) {
+        return (Get-Command omx -ErrorAction SilentlyContinue).Source
+    }
+
+    Write-Host "Installing oh-my-codex (OMX)"
+    & $npm.Source install -g oh-my-codex | Out-Null
+    $command = Get-Command omx -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    return $null
+}
+
 function Test-IsWrapperCandidate {
     param(
         [Parameter(Mandatory = $true)]
@@ -178,15 +199,26 @@ Require-Command codex
 $binDir = Join-Path $HOME "bin"
 $codexDir = Join-Path $HOME ".codex"
 $lbDir = Join-Path $HOME ".codex-lb"
-$runtimeDir = Join-Path $HOME ".codex-portable-setup"
+$runtimeDir = Join-Path $HOME ".codex-revamped"
+$legacyRuntimeDir = Join-Path $HOME ".codex-portable-setup"
 $runtimeEnv = Join-Path $runtimeDir "runtime.env"
 $wrapperPs1 = Join-Path $binDir "codex.ps1"
 $wrapperCmd = Join-Path $binDir "codex.cmd"
-$launcherPs1 = Join-Path $binDir "codex-lb-start.ps1"
+$launcherPs1 = Join-Path $binDir "codex-revamped-start.ps1"
+$launcherAliasPs1 = Join-Path $binDir "codex-lb-start.ps1"
+$syncPy = Join-Path $binDir "codex-account-sync.py"
 $codexConfig = Join-Path $codexDir "config.toml"
 $lbEnvExample = Join-Path $lbDir ".env.example"
 
 New-Item -ItemType Directory -Force -Path $binDir, $codexDir, $lbDir, $runtimeDir | Out-Null
+
+if ((-not (Test-Path -LiteralPath $runtimeEnv)) -and (Test-Path -LiteralPath (Join-Path $legacyRuntimeDir "runtime.env"))) {
+    Copy-Item -LiteralPath (Join-Path $legacyRuntimeDir "runtime.env") -Destination $runtimeEnv
+}
+
+if ((-not (Test-Path -LiteralPath (Join-Path $runtimeDir "accounts.seed.json"))) -and (Test-Path -LiteralPath (Join-Path $legacyRuntimeDir "accounts.seed.json"))) {
+    Copy-Item -LiteralPath (Join-Path $legacyRuntimeDir "accounts.seed.json") -Destination (Join-Path $runtimeDir "accounts.seed.json")
+}
 
 $realCodex = Resolve-RealCodex -WrapperPath $wrapperPs1 -RuntimeEnvPath $runtimeEnv
 Write-Host "Using codex binary: $realCodex"
@@ -198,18 +230,23 @@ Write-Host "Installing codex-lb from $gitUrl@$gitRef"
 & uv tool install --force $toolSpec
 
 $codexLbBin = Resolve-CodexLbBin
+$omxBin = Install-OmxIfPossible
 
 $runtimeContent = @(
     "PACKAGE_NAME=$($manifest["PACKAGE_NAME"])",
     "PACKAGE_VERSION=$($manifest["PACKAGE_VERSION"])",
     "PACKAGE_SLUG=$($manifest["PACKAGE_SLUG"])",
+    "CODEX_PORTABLE_DIR=$scriptDir",
+    "CODEX_RUNTIME_ENV=$runtimeEnv",
     "CODEX_REAL_BIN=$realCodex",
     "CODEX_LB_BIN=$codexLbBin",
     "CODEX_LB_LAUNCHER=$launcherPs1",
+    "CODEX_ACCOUNT_SYNCER=$syncPy",
     "CODEX_LB_DIR=$lbDir",
     "CODEX_LB_ENV_FILE=$(Join-Path $lbDir '.env')",
     "CODEX_HOST_DEFAULT=$($manifest["DEFAULT_HOST"])",
-    "CODEX_PORT_DEFAULT=$($manifest["DEFAULT_PORT"])"
+    "CODEX_PORT_DEFAULT=$($manifest["DEFAULT_PORT"])",
+    "CODEX_OMX_BIN=$omxBin"
 )
 
 $runtimeTemp = "$runtimeEnv.tmp"
@@ -229,13 +266,20 @@ foreach ($copy in @(
     @{ Source = (Join-Path $scriptDir "templates\codex-wrapper.ps1"); Target = $wrapperPs1 },
     @{ Source = (Join-Path $scriptDir "templates\codex-wrapper.cmd"); Target = $wrapperCmd },
     @{ Source = (Join-Path $scriptDir "templates\codex-lb-start.ps1"); Target = $launcherPs1 },
+    @{ Source = (Join-Path $scriptDir "templates\codex-account-sync.py"); Target = $syncPy },
     @{ Source = (Join-Path $scriptDir "templates\codex-lb.env.example"); Target = $lbEnvExample }
 )) {
     Backup-IfNeeded -Target $copy.Target -SourceFile $copy.Source
     Copy-Item -Force -LiteralPath $copy.Source -Destination $copy.Target
 }
 
+@"
+$ErrorActionPreference = "Stop"
+& (Join-Path \$HOME "bin\codex-revamped-start.ps1") @args
+exit \$LASTEXITCODE
+"@ | Set-Content -LiteralPath $launcherAliasPs1
+
 Ensure-UserPath -BinDir $binDir
 
 Write-Host "Install complete."
-Write-Host "Next: copy $lbEnvExample to $(Join-Path $lbDir '.env') if you need overrides, then run $wrapperPs1."
+Write-Host "Next: copy $lbEnvExample to $(Join-Path $lbDir '.env') if you need overrides, then run $wrapperPs1 or $launcherPs1."

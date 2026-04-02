@@ -1,11 +1,11 @@
-import { Clock, ExternalLink, Play, RotateCcw } from "lucide-react";
+import { Clock, ExternalLink, Pause, Play, RotateCcw } from "lucide-react";
 
 import { usePrivacyStore } from "@/hooks/use-privacy";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 import type { AccountSummary } from "@/features/dashboard/schemas";
-import { formatCompactAccountId } from "@/utils/account-identifiers";
+import { formatAccountNickname, formatCompactAccountId } from "@/utils/account-identifiers";
 import {
   normalizeStatus,
   quotaBarColor,
@@ -13,7 +13,7 @@ import {
 } from "@/utils/account-status";
 import { formatPercentNullable, formatQuotaResetLabel } from "@/utils/formatters";
 
-type AccountAction = "details" | "resume" | "reauth";
+type AccountAction = "details" | "pause" | "resume" | "reauth";
 
 export type AccountCardProps = {
   account: AccountSummary;
@@ -75,7 +75,7 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
   const primaryReset = formatQuotaResetLabel(account.resetAtPrimary ?? null);
   const secondaryReset = formatQuotaResetLabel(account.resetAtSecondary ?? null);
 
-  const title = account.displayName || account.email;
+  const title = formatAccountNickname(account);
   const compactId = formatCompactAccountId(account.accountId);
   const emailSubtitle =
     account.displayName && account.displayName !== account.email
@@ -92,15 +92,15 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
             {weeklyOnly ? <span>Weekly only</span> : null}
           </div>
           <p className="mt-1 truncate text-sm font-semibold leading-tight">
-            {blurred
-              ? <><span className="privacy-blur">{title}</span>{!emailSubtitle ? idSuffix : ""}</>
-              : <>{title}{!emailSubtitle ? idSuffix : ""}</>}
+            {blurred && emailSubtitle ? <span className="privacy-blur">{title}</span> : title}
+            {!emailSubtitle ? idSuffix : ""}
           </p>
-          {emailSubtitle ? (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground" title={showAccountId ? `Account ID ${account.accountId}` : undefined}>
-              <span className={blurred ? "privacy-blur" : undefined}>{emailSubtitle}</span>{showAccountId ? ` | ID ${compactId}` : ""}
-            </p>
-          ) : null}
+          <p className="mt-0.5 truncate text-xs text-muted-foreground" title={account.email}>
+            <span className={blurred && emailSubtitle ? "privacy-blur" : undefined}>
+              {emailSubtitle ?? account.email}
+            </span>
+            {showAccountId ? ` | ID ${compactId}` : ""}
+          </p>
         </div>
         <StatusBadge status={status} />
       </div>
@@ -117,10 +117,22 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
           variant="ghost"
           className="h-7 gap-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground"
           onClick={() => onAction?.(account, "details")}
-        >
+          >
           <ExternalLink className="h-3 w-3" />
           Details
         </Button>
+        {status !== "paused" && status !== "deactivated" && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => onAction?.(account, "pause")}
+          >
+            <Pause className="h-3 w-3" />
+            Pause
+          </Button>
+        )}
         {status === "paused" && (
           <Button
             type="button"

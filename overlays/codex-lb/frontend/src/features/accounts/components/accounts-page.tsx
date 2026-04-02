@@ -95,6 +95,8 @@ export function AccountsPage() {
               onSelect={handleSelectAccount}
               onOpenImport={() => importDialog.show()}
               onOpenOauth={() => oauthDialog.show()}
+              onPause={(accountId) => void pauseMutation.mutateAsync(accountId)}
+              onResume={(accountId) => void resumeMutation.mutateAsync(accountId)}
             />
           </div>
 

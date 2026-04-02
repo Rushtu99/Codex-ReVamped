@@ -1,12 +1,28 @@
 #!/bin/sh
 set -eu
 
-runtime_env="${HOME}/.codex-portable-setup/runtime.env"
+runtime_env_primary="${HOME}/.codex-revamped/runtime.env"
+runtime_env_legacy="${HOME}/.codex-portable-setup/runtime.env"
+portable_dir="${HOME}/.codex-revamped"
+
+if [ -f "${runtime_env_primary}" ]; then
+  runtime_env="${runtime_env_primary}"
+elif [ -f "${runtime_env_legacy}" ]; then
+  runtime_env="${runtime_env_legacy}"
+  portable_dir="${HOME}/.codex-portable-setup"
+else
+  runtime_env="${runtime_env_primary}"
+fi
+
 codex_config="${HOME}/.codex/config.toml"
 lb_env_example="${HOME}/.codex-lb/.env.example"
 wrapper="${HOME}/bin/codex"
-launcher="${HOME}/.local/bin/codex-lb-start"
-accounts_bundle="${HOME}/.codex-portable-setup/accounts.seed.json"
+launcher="${HOME}/.local/bin/codex-revamped-start"
+launcher_alias="${HOME}/.local/bin/codex-lb-start"
+syncer="${HOME}/.local/bin/codex-account-sync"
+omx_cli="${HOME}/.local/bin/omx"
+oh_my_codex_cli="${HOME}/.local/bin/oh-my-codex"
+accounts_bundle="${portable_dir}/accounts.seed.json"
 
 ok() {
   printf 'OK: %s\n' "$*"
@@ -21,7 +37,7 @@ fail() {
   exit 1
 }
 
-for cmd in git uv awk sed; do
+for cmd in git uv awk sed node npm python; do
   if command -v "${cmd}" >/dev/null 2>&1; then
     ok "command available: ${cmd}"
   else
@@ -35,7 +51,7 @@ else
   warn "codex is not currently available on PATH"
 fi
 
-for path in "${runtime_env}" "${codex_config}" "${lb_env_example}" "${wrapper}" "${launcher}"; do
+for path in "${runtime_env}" "${codex_config}" "${lb_env_example}" "${wrapper}" "${launcher}" "${launcher_alias}" "${syncer}"; do
   if [ -f "${path}" ]; then
     ok "file present: ${path}"
   else
@@ -47,6 +63,18 @@ if [ -f "${accounts_bundle}" ]; then
   ok "managed account bundle present: ${accounts_bundle}"
 else
   warn "managed account bundle missing: ${accounts_bundle}"
+fi
+
+if [ -x "${omx_cli}" ]; then
+  ok "omx wrapper present: ${omx_cli}"
+else
+  warn "omx wrapper missing"
+fi
+
+if [ -x "${oh_my_codex_cli}" ]; then
+  ok "oh-my-codex wrapper present: ${oh_my_codex_cli}"
+else
+  warn "oh-my-codex wrapper missing"
 fi
 
 if [ -f "${runtime_env}" ]; then
@@ -62,6 +90,12 @@ if [ -f "${runtime_env}" ]; then
     ok "codex-lb binary exists: ${CODEX_LB_BIN}"
   else
     warn "codex-lb binary missing or invalid in runtime metadata"
+  fi
+
+  if [ -n "${CODEX_OMX_BIN:-}" ] && [ -x "${CODEX_OMX_BIN}" ]; then
+    ok "omx binary exists: ${CODEX_OMX_BIN}"
+  else
+    warn "omx binary missing or invalid in runtime metadata"
   fi
 fi
 

@@ -6,12 +6,14 @@ install_script="${script_dir}/install.sh"
 doctor_script="${script_dir}/doctor.sh"
 import_accounts_script="${script_dir}/import-accounts.py"
 ui_overlay_script="${script_dir}/apply-ui-overlay.sh"
+runtime_portable_dir="${HOME}/.codex-revamped"
+legacy_runtime_portable_dir="${HOME}/.codex-portable-setup"
 env_file="${HOME}/.codex-lb/.env"
 env_example_file="${HOME}/.codex-lb/.env.example"
-launcher_file="${HOME}/.local/bin/codex-lb-start"
+launcher_file="${HOME}/.local/bin/codex-revamped-start"
 wrapper_file="${HOME}/bin/codex"
-runtime_env="${HOME}/.codex-portable-setup/runtime.env"
-accounts_bundle="${HOME}/.codex-portable-setup/accounts.seed.json"
+runtime_env="${runtime_portable_dir}/runtime.env"
+accounts_bundle="${runtime_portable_dir}/accounts.seed.json"
 
 say() {
   printf '%s\n' "$*"
@@ -51,7 +53,7 @@ ensure_profile_path() {
     if ! grep -F "${managed_line}" "${profile}" >/dev/null 2>&1; then
       {
         printf '\n'
-        printf '# Added by codex-portable-setup bootstrap\n'
+        printf '# Added by Codex-ReVamped bootstrap\n'
         printf '%s\n' "${managed_line}"
       } >> "${profile}"
     fi
@@ -91,11 +93,11 @@ PY
 }
 
 have_managed_wrapper() {
-  [ -f "${wrapper_file}" ] && grep -q 'codex-portable-setup runtime metadata' "${wrapper_file}" 2>/dev/null
+  [ -f "${wrapper_file}" ] && grep -q 'runtime metadata' "${wrapper_file}" 2>/dev/null
 }
 
 have_managed_launcher() {
-  [ -f "${launcher_file}" ] && grep -q 'codex-portable-setup runtime metadata' "${launcher_file}" 2>/dev/null
+  [ -f "${launcher_file}" ] && grep -q 'runtime metadata' "${launcher_file}" 2>/dev/null
 }
 
 have_runtime_env() {
@@ -148,7 +150,14 @@ import_accounts_from_config() {
   fi
 
   say "Importing saved codex-lb accounts from ${accounts_bundle}"
-  python "${import_accounts_script}"
+  python "${import_accounts_script}" --bundle "${accounts_bundle}"
+}
+
+migrate_legacy_runtime() {
+  mkdir -p "${runtime_portable_dir}"
+  if [ -d "${legacy_runtime_portable_dir}" ] && [ ! -f "${accounts_bundle}" ] && [ -f "${legacy_runtime_portable_dir}/accounts.seed.json" ]; then
+    cp "${legacy_runtime_portable_dir}/accounts.seed.json" "${accounts_bundle}"
+  fi
 }
 
 require_termux
@@ -170,27 +179,28 @@ require_command node
 require_command npm
 
 if ! command -v codex >/dev/null 2>&1; then
-  fail "Codex CLI is not installed yet. Install the real codex binary first, then rerun this script."
+  fail "Codex CLI is not installed yet. Install the real Codex binary first, then rerun this script."
 fi
 
 ensure_profile_path
+migrate_legacy_runtime
 
 if have_complete_managed_setup; then
-  say "Managed codex/codex-lb setup already present; skipping reinstall"
+  say "Managed Codex-ReVamped setup already present; skipping reinstall"
 else
-  say "Running managed codex-portable-setup installer"
+  say "Running Codex-ReVamped installer"
   "${install_script}"
 fi
 
 ensure_env_override
 
-say "Applying CodexLB ReVamped UI"
+say "Applying Codex ReVamped UI"
 "${ui_overlay_script}"
 
-say "Running portability doctor"
+say "Running doctor"
 "${doctor_script}"
 
-say "Starting codex-lb on 0.0.0.0:2455"
+say "Starting Codex-ReVamped on 0.0.0.0:2455"
 start_codex_lb
 
 say "Verifying local HTTP endpoints"
@@ -204,12 +214,12 @@ host_ip=$(detect_host_ip || true)
 say ""
 say "Bootstrap complete."
 say "Managed wrapper: ${wrapper_file}"
-say "Managed launcher: ${launcher_file}"
+say "Standalone launcher: ${launcher_file}"
 say "LAN listener: 0.0.0.0:2455"
 if [ -n "${host_ip}" ]; then
-  say "Open codex-lb UI from another device: http://${host_ip}:2455/"
-  say "Open docs from another device:       http://${host_ip}:2455/docs"
+  say "Open Codex-ReVamped from another device: http://${host_ip}:2455/"
+  say "Open docs from another device:          http://${host_ip}:2455/docs"
 else
   say "Could not detect wlan0 IP automatically. Run: ifconfig wlan0 | awk '/inet / { print \$2; exit }'"
 fi
-say "Running 'codex' will auto-start codex-lb in future sessions if it is not already running."
+say "Running 'codex' will auto-start Codex-ReVamped in future sessions if it is not already running."

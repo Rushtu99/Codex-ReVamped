@@ -1,13 +1,14 @@
 import { User } from "lucide-react";
 
-import { isEmailLabel } from "@/components/blur-email";
 import { usePrivacyStore } from "@/hooks/use-privacy";
 import { AccountActions } from "@/features/accounts/components/account-actions";
 import { AccountTokenInfo } from "@/features/accounts/components/account-token-info";
 import { AccountUsagePanel } from "@/features/accounts/components/account-usage-panel";
 import type { AccountSummary } from "@/features/accounts/schemas";
 import { useAccountTrends } from "@/features/accounts/hooks/use-accounts";
-import { formatCompactAccountId } from "@/utils/account-identifiers";
+import { formatAccountNickname, formatCompactAccountId } from "@/utils/account-identifiers";
+import { StatusBadge } from "@/components/status-badge";
+import { normalizeStatus } from "@/utils/account-status";
 
 export type AccountDetailProps = {
   account: AccountSummary | null;
@@ -43,29 +44,34 @@ export function AccountDetail({
     );
   }
 
-  const title = account.displayName || account.email;
-  const titleIsEmail = isEmailLabel(title, account.email);
+  const title = formatAccountNickname(account);
+  const status = normalizeStatus(account.status);
   const compactId = formatCompactAccountId(account.accountId);
   const emailSubtitle = account.displayName && account.displayName !== account.email
     ? account.email
     : null;
-  const idSuffix = showAccountId ? ` (${compactId})` : "";
 
   return (
-    <div key={account.accountId} className="animate-fade-in-up space-y-4 rounded-md border bg-card p-5">
-      <div>
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-          <span>{account.planType}</span>
-          <span>Account detail</span>
-        </div>
-        <h2 className="text-base font-semibold">
-          {titleIsEmail ? <><span className={blurred ? "privacy-blur" : ""}>{title}</span>{idSuffix}</> : <>{title}{!emailSubtitle ? idSuffix : ""}</>}
-        </h2>
-        {emailSubtitle ? (
-          <p className="mt-0.5 text-xs text-muted-foreground" title={showAccountId ? `Account ID ${account.accountId}` : undefined}>
-            <span className={blurred ? "privacy-blur" : ""}>{emailSubtitle}</span>{showAccountId ? ` | ID ${compactId}` : ""}
+    <div key={account.accountId} className="animate-fade-in-up space-y-4 rounded-md border bg-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <span>{account.planType}</span>
+            <span>Account detail</span>
+            {showAccountId ? <span>ID {compactId}</span> : null}
+          </div>
+          <h2 className="truncate text-base font-semibold">
+            <span className={blurred && emailSubtitle ? "privacy-blur" : undefined}>{title}</span>
+          </h2>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground" title={account.email}>
+            <span className={blurred && emailSubtitle ? "privacy-blur" : undefined}>
+              {emailSubtitle ?? account.email}
+            </span>
           </p>
-        ) : null}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <StatusBadge status={status} />
+        </div>
       </div>
 
       <AccountUsagePanel account={account} trends={trends} />

@@ -17,6 +17,7 @@ import { buildDashboardView } from "@/features/dashboard/utils";
 import type { AccountSummary } from "@/features/dashboard/schemas";
 import { useThemeStore } from "@/hooks/use-theme";
 import { REQUEST_STATUS_LABELS } from "@/utils/constants";
+import { formatAccountNickname } from "@/utils/account-identifiers";
 import { formatModelLabel, formatSlug } from "@/utils/formatters";
 import { normalizeStatus } from "@/utils/account-status";
 
@@ -28,7 +29,7 @@ export function DashboardPage() {
   const isDark = useThemeStore((s) => s.theme === "dark");
   const dashboardQuery = useDashboard();
   const { filters, logsQuery, optionsQuery, updateFilters } = useRequestLogs();
-  const { resumeMutation } = useAccountMutations();
+  const { pauseMutation, resumeMutation } = useAccountMutations();
 
   const isRefreshing = dashboardQuery.isFetching || logsQuery.isFetching;
 
@@ -45,12 +46,15 @@ export function DashboardPage() {
         case "resume":
           void resumeMutation.mutateAsync(account.accountId);
           break;
+        case "pause":
+          void pauseMutation.mutateAsync(account.accountId);
+          break;
         case "reauth":
           navigate(`/accounts?selected=${account.accountId}`);
           break;
       }
     },
-    [navigate, resumeMutation],
+    [navigate, pauseMutation, resumeMutation],
   );
 
   const overview = dashboardQuery.data;
@@ -129,9 +133,8 @@ export function DashboardPage() {
   const accountOptions = useMemo(() => {
     const entries = new Map<string, { label: string; isEmail: boolean }>();
     for (const account of overview?.accounts ?? []) {
-      const raw = account.displayName || account.email || account.accountId;
-      const isEmail = !!account.email && raw === account.email;
-      entries.set(account.accountId, { label: raw, isEmail });
+      const label = formatAccountNickname(account);
+      entries.set(account.accountId, { label, isEmail: false });
     }
     return (optionsQuery.data?.accountIds ?? []).map((accountId) => {
       const entry = entries.get(accountId);

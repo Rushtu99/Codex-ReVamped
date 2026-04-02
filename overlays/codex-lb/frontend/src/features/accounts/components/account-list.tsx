@@ -13,7 +13,7 @@ import {
 import { AccountListItem } from "@/features/accounts/components/account-list-item";
 import { WindowsOauthHelp } from "@/features/accounts/components/windows-oauth-help";
 import type { AccountSummary } from "@/features/accounts/schemas";
-import { buildDuplicateAccountIdSet } from "@/utils/account-identifiers";
+import { buildDuplicateAccountIdSet, formatAccountNickname } from "@/utils/account-identifiers";
 import { formatSlug } from "@/utils/formatters";
 
 const STATUS_FILTER_OPTIONS = ["all", "active", "paused", "rate_limited", "quota_exceeded", "deactivated"];
@@ -24,6 +24,8 @@ export type AccountListProps = {
   onSelect: (accountId: string) => void;
   onOpenImport: () => void;
   onOpenOauth: () => void;
+  onPause: (accountId: string) => void;
+  onResume: (accountId: string) => void;
 };
 
 export function AccountList({
@@ -32,6 +34,8 @@ export function AccountList({
   onSelect,
   onOpenImport,
   onOpenOauth,
+  onPause,
+  onResume,
 }: AccountListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -46,7 +50,9 @@ export function AccountList({
       if (!needle) {
         return true;
       }
+      const nickname = formatAccountNickname(account).toLowerCase();
       return (
+        nickname.includes(needle) ||
         account.email.toLowerCase().includes(needle) ||
         account.accountId.toLowerCase().includes(needle) ||
         account.planType.toLowerCase().includes(needle)
@@ -127,6 +133,9 @@ export function AccountList({
               selected={account.accountId === selectedAccountId}
               showAccountId={duplicateAccountIds.has(account.accountId)}
               onSelect={onSelect}
+              onPause={onPause}
+              onResume={onResume}
+              onReauth={onOpenOauth}
             />
           ))
         )}

@@ -26,11 +26,18 @@ function Write-Warn {
     Write-Host "WARN: $Message"
 }
 
-$runtimeEnv = Join-Path $HOME ".codex-portable-setup\runtime.env"
+$runtimeEnv = Join-Path $HOME ".codex-revamped\runtime.env"
+$legacyRuntimeEnv = Join-Path $HOME ".codex-portable-setup\runtime.env"
 $codexConfig = Join-Path $HOME ".codex\config.toml"
 $lbEnvExample = Join-Path $HOME ".codex-lb\.env.example"
 $wrapper = Join-Path $HOME "bin\codex.ps1"
-$launcher = Join-Path $HOME "bin\codex-lb-start.ps1"
+$launcher = Join-Path $HOME "bin\codex-revamped-start.ps1"
+$launcherAlias = Join-Path $HOME "bin\codex-lb-start.ps1"
+$syncer = Join-Path $HOME "bin\codex-account-sync.py"
+
+if ((-not (Test-Path -LiteralPath $runtimeEnv)) -and (Test-Path -LiteralPath $legacyRuntimeEnv)) {
+    $runtimeEnv = $legacyRuntimeEnv
+}
 
 foreach ($command in @("git", "uv")) {
     if (Get-Command $command -ErrorAction SilentlyContinue) {
@@ -48,7 +55,7 @@ else {
     Write-Warn "codex is not currently available on PATH"
 }
 
-foreach ($path in @($runtimeEnv, $codexConfig, $lbEnvExample, $wrapper, $launcher)) {
+foreach ($path in @($runtimeEnv, $codexConfig, $lbEnvExample, $wrapper, $launcher, $launcherAlias, $syncer)) {
     if (Test-Path -LiteralPath $path) {
         Write-Ok "file present: $path"
     }
@@ -71,6 +78,10 @@ if (Test-Path -LiteralPath $runtimeEnv) {
     }
     else {
         Write-Warn "codex-lb binary missing or invalid in runtime metadata"
+    }
+
+    if ($runtime.ContainsKey("CODEX_OMX_BIN") -and $runtime["CODEX_OMX_BIN"]) {
+        Write-Ok "omx runtime key present: $($runtime["CODEX_OMX_BIN"])"
     }
 }
 

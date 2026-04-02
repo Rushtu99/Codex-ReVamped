@@ -5,7 +5,8 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 overlay_root="${script_dir}/overlays/codex-lb"
 target_root="${HOME}/.local/src/codex-lb"
 frontend_dir="${target_root}/frontend"
-runtime_env="${HOME}/.codex-portable-setup/runtime.env"
+runtime_env_primary="${HOME}/.codex-revamped/runtime.env"
+runtime_env_legacy="${HOME}/.codex-portable-setup/runtime.env"
 
 say() {
   printf '%s\n' "$*"
@@ -72,6 +73,6 @@ else
   say "codex-lb is not running; start it with codex or codex-lb-start"
 fi
 
-if [ -f "${runtime_env}" ]; then
-  say "UI overlay applied successfully."
+if [ -f "${runtime_env_primary}" ] || [ -f "${runtime_env_legacy}" ]; then
+  say "Codex-ReVamped UI overlay applied successfully."
 fi

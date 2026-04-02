@@ -1,20 +1,19 @@
 # Publishing The Package
 
-## 1. Initialize The Repo
+## 1. Prepare The Repo
 
 ```sh
-cd /data/data/com.termux/files/home/codex-portable-setup
-git init
+cd /data/data/com.termux/files/home/tmp-codex-lb-setup-compare
 git add .
-git commit -m "Initial codex portable setup package"
+git commit -m "Repackage as Codex-ReVamped"
 ```
 
-## 2. Create A New Private Remote
+## 2. Point At The Public Remote
 
-Create a new empty private repository on your Git host, then add it:
+Set the canonical repository remote:
 
 ```sh
-git remote add origin <your-new-remote-url>
+git remote set-url origin git@github.com:Rushtu99/Codex-ReVamped.git
 git branch -M main
 git push -u origin main
 ```
@@ -24,8 +23,8 @@ git push -u origin main
 POSIX:
 
 ```sh
-git clone <your-new-remote-url> codex-portable-setup
-cd codex-portable-setup
+git clone git@github.com:Rushtu99/Codex-ReVamped.git ~/.codex-revamped
+cd ~/.codex-revamped
 ./install.sh
 ./doctor.sh
 ```
@@ -33,8 +32,8 @@ cd codex-portable-setup
 Windows PowerShell:
 
 ```powershell
-git clone <your-new-remote-url> codex-portable-setup
-Set-Location codex-portable-setup
+git clone git@github.com:Rushtu99/Codex-ReVamped.git $HOME\.codex-revamped
+Set-Location $HOME\.codex-revamped
 .\install.ps1
 .\doctor.ps1
 ```
@@ -47,3 +46,5 @@ Do not commit any generated files from the target machine that contain secrets o
 - `~/.codex-lb/.env`
 - `~/.codex-lb/store.db*`
 - `~/.codex-lb/encryption.key`
+- `~/.codex-revamped/accounts.seed.json`
+- `~/.codex-revamped/runtime.env`
