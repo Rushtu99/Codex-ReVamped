@@ -110,6 +110,17 @@ export function createDashboardOverview(overrides: Partial<DashboardOverview> = 
   const response = {
     lastSyncAt: offsetIso(-5),
     accounts,
+    accountRollingUsage: Object.fromEntries(
+      accounts.map((account, index) => [
+        account.accountId,
+        {
+          last5m: { requestCount: index + 1, totalTokens: 1200 * (index + 1) },
+          last15m: { requestCount: (index + 1) * 2, totalTokens: 2200 * (index + 1) },
+          last1h: { requestCount: (index + 1) * 4, totalTokens: 4400 * (index + 1) },
+          last1d: { requestCount: (index + 1) * 12, totalTokens: 13200 * (index + 1) },
+        },
+      ]),
+    ),
     summary: {
       primaryWindow: {
         remainingPercent: 63.5,

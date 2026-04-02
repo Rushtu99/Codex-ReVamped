@@ -75,11 +75,10 @@ export function AccountsPage() {
 
   return (
     <div className="animate-fade-in-up space-y-6">
-      {/* Page header */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Accounts</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage imported accounts and authentication flows.
+          Directory, quota detail, and recovery actions for the account pool.
         </p>
       </div>
 
@@ -89,13 +88,17 @@ export function AccountsPage() {
         <AccountsSkeleton />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
-          <div className="rounded-xl border bg-card p-4">
+          <div className="rounded-md border bg-card p-4">
             <AccountList
               accounts={accounts}
               selectedAccountId={resolvedSelectedAccountId}
               onSelect={handleSelectAccount}
               onOpenImport={() => importDialog.show()}
               onOpenOauth={() => oauthDialog.show()}
+              onPause={(accountId) => void pauseMutation.mutateAsync(accountId)}
+              onResume={(accountId) => void resumeMutation.mutateAsync(accountId)}
+              onReauth={() => oauthDialog.show()}
+              busy={mutationBusy}
             />
           </div>
 

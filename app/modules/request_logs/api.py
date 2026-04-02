@@ -43,6 +43,7 @@ async def list_request_logs(
     search: str | None = Query(default=None),
     account_id: list[str] | None = Query(default=None, alias="accountId"),
     status: list[str] | None = Query(default=None),
+    source: list[str] | None = Query(default=None),
     model: list[str] | None = Query(default=None),
     reasoning_effort: list[str] | None = Query(default=None, alias="reasoningEffort"),
     model_option: list[str] | None = Query(default=None, alias="modelOption"),
@@ -65,6 +66,7 @@ async def list_request_logs(
         models=model,
         reasoning_efforts=reasoning_effort,
         status=status,
+        sources=source,
     )
     return RequestLogsResponse(
         requests=page.requests,
@@ -76,6 +78,7 @@ async def list_request_logs(
 @router.get("/options", response_model=RequestLogFilterOptionsResponse)
 async def list_request_log_filter_options(
     status: list[str] | None = Query(default=None),
+    source: list[str] | None = Query(default=None),
     account_id: list[str] | None = Query(default=None, alias="accountId"),
     model: list[str] | None = Query(default=None),
     reasoning_effort: list[str] | None = Query(default=None, alias="reasoningEffort"),
@@ -96,6 +99,7 @@ async def list_request_log_filter_options(
         model_options=parsed_options,
         models=model,
         reasoning_efforts=reasoning_effort,
+        sources=source,
     )
     return RequestLogFilterOptionsResponse(
         account_ids=options.account_ids,
@@ -104,4 +108,5 @@ async def list_request_log_filter_options(
             for option in options.model_options
         ],
         statuses=options.statuses,
+        sources=options.sources,
     )

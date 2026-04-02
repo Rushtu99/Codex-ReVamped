@@ -10,6 +10,8 @@ from app.db.models import UsageHistory
 from app.modules.accounts.mappers import build_account_summaries
 from app.modules.dashboard.repository import DashboardRepository
 from app.modules.dashboard.schemas import (
+    AccountRollingUsage,
+    AccountRollingUsageWindow,
     DashboardOverviewResponse,
     DashboardUsageWindows,
     DepletionResponse,
@@ -42,6 +44,12 @@ class DashboardService:
             secondary_usage=secondary_usage,
             encryptor=self._encryptor,
             include_auth=False,
+        )
+        account_ids = [account.id for account in accounts]
+        account_rolling_usage = await _build_account_rolling_usage(
+            repo=self._repo,
+            account_ids=account_ids,
+            now=now,
         )
 
         primary_rows_raw = _rows_from_latest(primary_usage)
@@ -193,6 +201,7 @@ class DashboardService:
         return DashboardOverviewResponse(
             last_sync_at=_latest_recorded_at(primary_usage, secondary_usage, additional_ts),
             accounts=account_summaries,
+            account_rolling_usage=account_rolling_usage,
             summary=summary,
             windows=windows,
             trends=trends,
@@ -232,6 +241,45 @@ def _build_depletion_by_window(
         )
 
     return _aggregate(primary_history, "primary"), _aggregate(secondary_history, "secondary")
+
+
+async def _build_account_rolling_usage(
+    *,
+    repo: DashboardRepository,
+    account_ids: list[str],
+    now: datetime,
+) -> dict[str, AccountRollingUsage]:
+    result = {
+        account_id: AccountRollingUsage(
+            last5m=AccountRollingUsageWindow(),
+            last15m=AccountRollingUsageWindow(),
+            last1h=AccountRollingUsageWindow(),
+            last1d=AccountRollingUsageWindow(),
+        )
+        for account_id in account_ids
+    }
+    windows = [
+        ("last5m", timedelta(minutes=5)),
+        ("last15m", timedelta(minutes=15)),
+        ("last1h", timedelta(hours=1)),
+        ("last1d", timedelta(days=1)),
+    ]
+    for field_name, delta in windows:
+        summaries = await repo.list_request_usage_summary_by_account(
+            account_ids=account_ids,
+            since=now - delta,
+        )
+        for account_id in account_ids:
+            usage = summaries.get(account_id)
+            setattr(
+                result[account_id],
+                field_name,
+                AccountRollingUsageWindow(
+                    request_count=usage.request_count if usage else 0,
+                    total_tokens=usage.total_tokens if usage else 0,
+                ),
+            )
+    return result
 
 
 def _rows_from_latest(latest: dict[str, UsageHistory]) -> list[UsageWindowRow]:

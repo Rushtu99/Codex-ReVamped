@@ -76,6 +76,9 @@ async def test_dashboard_overview_combines_data(async_client, db_setup):
     assert payload["windows"]["secondary"]["windowKey"] == "secondary"
     assert "requestLogs" not in payload
     assert payload["lastSyncAt"] == secondary_time.isoformat() + "Z"
+    assert payload["accountRollingUsage"]["acc_dash"]["last5m"]["requestCount"] == 1
+    assert payload["accountRollingUsage"]["acc_dash"]["last5m"]["totalTokens"] == 150
+    assert payload["accountRollingUsage"]["acc_dash"]["last1d"]["requestCount"] == 1
 
     # Verify trends are present and have 28 data points each
     assert "trends" in payload
@@ -128,6 +131,7 @@ async def test_dashboard_overview_maps_weekly_only_primary_to_secondary(async_cl
     payload = response.json()
 
     accounts = {item["accountId"]: item for item in payload["accounts"]}
+    rolling = payload["accountRollingUsage"]
 
     assert payload["summary"]["primaryWindow"]["windowMinutes"] == 300
     assert payload["windows"]["primary"]["windowMinutes"] == 300
@@ -135,6 +139,9 @@ async def test_dashboard_overview_maps_weekly_only_primary_to_secondary(async_cl
     assert accounts["acc_free"]["windowMinutesPrimary"] is None
     assert accounts["acc_free"]["windowMinutesSecondary"] == 10080
     assert accounts["acc_free"]["usage"]["secondaryRemainingPercent"] == pytest.approx(80.0)
+    assert rolling["acc_plus"]["last5m"]["requestCount"] == 0
+    assert rolling["acc_plus"]["last1d"]["totalTokens"] == 0
+    assert rolling["acc_free"]["last5m"]["requestCount"] == 0
 
 
 @pytest.mark.asyncio

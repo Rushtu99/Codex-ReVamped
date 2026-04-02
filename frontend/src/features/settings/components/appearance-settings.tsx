@@ -14,35 +14,35 @@ export function AppearanceSettings() {
   const setTheme = useThemeStore((s) => s.setTheme);
 
   return (
-    <section className="rounded-xl border bg-card p-5">
+    <section className="rounded-md border bg-card p-5">
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
               <Palette className="h-4 w-4 text-primary" aria-hidden="true" />
             </div>
             <div>
               <h3 className="text-sm font-semibold">Appearance</h3>
-              <p className="text-xs text-muted-foreground">Choose how the interface looks.</p>
+              <p className="text-xs text-muted-foreground">Theme controls for CodexLB ReVamped.</p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border p-3">
+        <div className="flex items-center justify-between rounded-md border p-3">
           <div>
             <p className="text-sm font-medium">Theme</p>
             <p className="text-xs text-muted-foreground">Select your preferred color scheme.</p>
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-muted/40 p-0.5">
+          <div className="flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 p-0.5">
             {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => setTheme(value)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-200",
+                  "flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors duration-150",
                   preference === value
-                    ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
+                    ? "bg-background text-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >

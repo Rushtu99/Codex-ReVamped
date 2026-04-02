@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections.abc import AsyncIterator, Mapping
+from dataclasses import dataclass
 from typing import cast
 
 from fastapi import APIRouter, Body, Depends, File, Form, Request, Response, Security, UploadFile, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
+import httpx
 from pydantic import ValidationError
 
 from app.core.auth.dependencies import (
@@ -39,7 +42,8 @@ from app.core.openai.v1_requests import V1ResponsesCompactRequest, V1ResponsesRe
 from app.core.runtime_logging import log_error_response
 from app.core.types import JsonValue
 from app.core.utils.json_guards import is_json_mapping
-from app.core.utils.sse import parse_sse_data_json
+from app.core.utils.request_id import ensure_request_id
+from app.core.utils.sse import format_sse_event, parse_sse_data_json
 from app.db.session import get_background_session
 from app.dependencies import ProxyContext, get_proxy_context, get_proxy_websocket_context
 from app.modules.api_keys.repository import ApiKeysRepository
@@ -66,6 +70,7 @@ from app.modules.proxy.schemas import (
     RateLimitStatusPayload,
     ReasoningLevelSchema,
 )
+from app.modules.request_logs.repository import RequestLogsRepository
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +109,17 @@ _UNAVAILABLE_SELECTION_ERROR_CODES = {
     "additional_quota_data_unavailable",
     "no_additional_quota_eligible_accounts",
 }
+_LOCAL_MODEL_PREFIXES = ("ollama/", "local/")
+_LOCAL_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+_LOCAL_OLLAMA_TIMEOUT_SECONDS = 120.0
+
+
+@dataclass(slots=True)
+class _LocalResponseExecution:
+    lines: list[str]
+    response_payload: OpenAIResponsePayload | None
+    error_payload: OpenAIErrorEnvelopeModel | None
+    status_code: int
 
 
 @router.post(
@@ -376,6 +392,46 @@ async def v1_chat_completions(
         request_model=effective_model,
         request_service_tier=responses_payload.service_tier,
     )
+    local_execution = await _execute_local_response(
+        responses_payload,
+        api_key=api_key,
+        reservation=reservation,
+        request_transport="http",
+    )
+    if local_execution is not None:
+        if local_execution.error_payload is not None:
+            return _logged_error_json_response(
+                request,
+                local_execution.status_code,
+                local_execution.error_payload.model_dump(mode="json", exclude_none=True),
+                headers=rate_limit_headers,
+            )
+        local_stream = _stream_local_lines(local_execution.lines)
+        if payload.stream:
+            stream_options = payload.stream_options
+            include_usage = bool(stream_options and stream_options.include_usage)
+            return StreamingResponse(
+                stream_chat_chunks(local_stream, model=responses_payload.model, include_usage=include_usage),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", **rate_limit_headers},
+            )
+        result = await collect_chat_completion(local_stream, model=responses_payload.model)
+        if isinstance(result, OpenAIErrorEnvelopeModel):
+            error = result.error
+            code = error.code if error else None
+            status_code = 503 if code in _UNAVAILABLE_SELECTION_ERROR_CODES else 502
+            return _logged_error_json_response(
+                request,
+                status_code,
+                content=result.model_dump(mode="json", exclude_none=True),
+                headers=rate_limit_headers,
+            )
+        return JSONResponse(
+            content=result.model_dump(mode="json", exclude_none=True),
+            status_code=200,
+            headers=rate_limit_headers,
+        )
+
     responses_payload.stream = True
     apply_api_key_enforcement(responses_payload, api_key)
     stream = context.service.stream_responses(
@@ -452,6 +508,26 @@ async def _stream_responses(
         if downstream_turn_state is not None
         else {}
     )
+    local_execution = await _execute_local_response(
+        payload,
+        api_key=api_key,
+        reservation=reservation,
+        request_transport="http",
+    )
+    if local_execution is not None:
+        if local_execution.error_payload is not None:
+            return _logged_error_json_response(
+                request,
+                local_execution.status_code,
+                local_execution.error_payload.model_dump(mode="json", exclude_none=True),
+                headers={**turn_state_headers, **rate_limit_headers},
+            )
+        return StreamingResponse(
+            _stream_local_lines(local_execution.lines),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", **turn_state_headers, **rate_limit_headers},
+        )
+
     payload.stream = True
     if prefer_http_bridge:
         stream = context.service.stream_http_responses(
@@ -528,6 +604,32 @@ async def _collect_responses(
         if downstream_turn_state is not None
         else {}
     )
+    local_execution = await _execute_local_response(
+        payload,
+        api_key=api_key,
+        reservation=reservation,
+        request_transport="http",
+    )
+    if local_execution is not None:
+        if local_execution.error_payload is not None:
+            return _logged_error_json_response(
+                request,
+                local_execution.status_code,
+                local_execution.error_payload.model_dump(mode="json", exclude_none=True),
+                headers={**turn_state_headers, **rate_limit_headers},
+            )
+        if local_execution.response_payload is None:
+            return _logged_error_json_response(
+                request,
+                502,
+                _default_error_envelope().model_dump(mode="json", exclude_none=True),
+                headers={**turn_state_headers, **rate_limit_headers},
+            )
+        return JSONResponse(
+            content=local_execution.response_payload.model_dump(mode="json", exclude_none=True),
+            headers={**turn_state_headers, **rate_limit_headers},
+        )
+
     payload.stream = True
     if prefer_http_bridge:
         stream = context.service.stream_http_responses(
@@ -735,6 +837,364 @@ async def _prepend_first(first: str | None, stream: AsyncIterator[str]) -> Async
 
 def _parse_sse_payload(line: str) -> dict[str, JsonValue] | None:
     return parse_sse_data_json(line)
+
+
+async def _stream_local_lines(lines: list[str]) -> AsyncIterator[str]:
+    for line in lines:
+        yield line
+
+
+def _is_local_model(model: str) -> bool:
+    normalized = model.strip().lower()
+    return any(normalized.startswith(prefix) for prefix in _LOCAL_MODEL_PREFIXES)
+
+
+def _resolve_local_model_name(model: str) -> str:
+    normalized = model.strip()
+    for prefix in _LOCAL_MODEL_PREFIXES:
+        if normalized.lower().startswith(prefix):
+            return normalized[len(prefix) :].strip()
+    return normalized
+
+
+def _ollama_base_url() -> str:
+    return os.getenv("CODEX_LB_LOCAL_OLLAMA_BASE_URL", _LOCAL_OLLAMA_BASE_URL).rstrip("/")
+
+
+def _ollama_timeout_seconds() -> float:
+    raw = os.getenv("CODEX_LB_LOCAL_OLLAMA_TIMEOUT_SECONDS")
+    if not raw:
+        return _LOCAL_OLLAMA_TIMEOUT_SECONDS
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return _LOCAL_OLLAMA_TIMEOUT_SECONDS
+    return parsed if parsed > 0 else _LOCAL_OLLAMA_TIMEOUT_SECONDS
+
+
+def _extract_prompt_text(input_value: JsonValue) -> str:
+    if isinstance(input_value, str):
+        return input_value.strip()
+
+    fragments: list[str] = []
+
+    def visit(value: JsonValue) -> None:
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                fragments.append(stripped)
+            return
+        if isinstance(value, list):
+            for item in value:
+                visit(item)
+            return
+        if not isinstance(value, dict):
+            return
+
+        text_value = value.get("text")
+        if isinstance(text_value, str):
+            stripped = text_value.strip()
+            if stripped:
+                fragments.append(stripped)
+
+        content_value = value.get("content")
+        if content_value is not None:
+            visit(content_value)
+
+        input_field = value.get("input")
+        if input_field is not None:
+            visit(input_field)
+
+    visit(input_value)
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for fragment in fragments:
+        if fragment in seen:
+            continue
+        deduped.append(fragment)
+        seen.add(fragment)
+    return "\n".join(deduped).strip()
+
+
+def _build_local_prompt(payload: ResponsesRequest) -> str:
+    parts: list[str] = []
+    instructions = payload.instructions.strip()
+    if instructions:
+        parts.append(instructions)
+    extracted = _extract_prompt_text(payload.input)
+    if extracted:
+        parts.append(extracted)
+    return "\n\n".join(parts).strip() or "Continue."
+
+
+async def _finalize_local_reservation(
+    reservation: ApiKeyUsageReservationData | None,
+    *,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    service_tier: str | None,
+) -> None:
+    if reservation is None:
+        return
+    async with get_background_session() as session:
+        service = ApiKeysService(ApiKeysRepository(session))
+        try:
+            await service.finalize_usage_reservation(
+                reservation.reservation_id,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_input_tokens=0,
+                service_tier=service_tier,
+            )
+        except Exception:
+            logger.warning("Failed to finalize local API key reservation id=%s", reservation.reservation_id, exc_info=True)
+            await service.release_usage_reservation(reservation.reservation_id)
+
+
+async def _write_local_request_log(
+    *,
+    request_id: str,
+    model: str,
+    api_key: ApiKeyData | None,
+    status: str,
+    error_code: str | None,
+    error_message: str | None,
+    input_tokens: int | None,
+    output_tokens: int | None,
+    latency_ms: int | None,
+    reasoning_effort: str | None,
+    service_tier: str | None,
+    transport: str,
+) -> None:
+    async with get_background_session() as session:
+        repository = RequestLogsRepository(session)
+        await repository.add_log(
+            account_id=None,
+            api_key_id=api_key.id if api_key else None,
+            request_id=request_id,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            status=status,
+            error_code=error_code,
+            error_message=error_message,
+            cached_input_tokens=0,
+            reasoning_tokens=None,
+            reasoning_effort=reasoning_effort,
+            service_tier=service_tier,
+            requested_service_tier=service_tier,
+            actual_service_tier=service_tier if status == "success" else None,
+            transport=transport,
+            requested_at=None,
+        )
+
+
+def _local_response_payload(
+    *,
+    response_id: str,
+    model: str,
+    text: str,
+    input_tokens: int,
+    output_tokens: int,
+) -> dict[str, JsonValue]:
+    total_tokens = max(0, input_tokens) + max(0, output_tokens)
+    return {
+        "id": response_id,
+        "status": "completed",
+        "model": model,
+        "output": [
+            {
+                "id": f"msg_{response_id}",
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": text,
+                        "annotations": [],
+                    }
+                ],
+            }
+        ],
+        "usage": {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "input_tokens_details": {"cached_tokens": 0},
+            "output_tokens_details": {"reasoning_tokens": 0},
+        },
+    }
+
+
+def _local_error_execution(
+    *,
+    response_id: str,
+    status_code: int,
+    error_payload: OpenAIErrorEnvelopeModel,
+) -> _LocalResponseExecution:
+    error = error_payload.error.model_dump(mode="json", exclude_none=True) if error_payload.error else {}
+    failed_event = {
+        "type": "response.failed",
+        "response": {
+            "id": response_id,
+            "status": "failed",
+            "error": error,
+        },
+    }
+    return _LocalResponseExecution(
+        lines=[format_sse_event(failed_event)],
+        response_payload=None,
+        error_payload=error_payload,
+        status_code=status_code,
+    )
+
+
+async def _execute_local_response(
+    payload: ResponsesRequest,
+    *,
+    api_key: ApiKeyData | None,
+    reservation: ApiKeyUsageReservationData | None,
+    request_transport: str,
+) -> _LocalResponseExecution | None:
+    if not _is_local_model(payload.model):
+        return None
+
+    request_id = ensure_request_id()
+    response_id = f"resp_local_{request_id}"
+    model = payload.model
+    ollama_model = _resolve_local_model_name(model)
+    prompt = _build_local_prompt(payload)
+    started = time.monotonic()
+
+    try:
+        async with httpx.AsyncClient(timeout=_ollama_timeout_seconds()) as client:
+            response = await client.post(
+                f"{_ollama_base_url()}/api/generate",
+                json={
+                    "model": ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                },
+            )
+            response.raise_for_status()
+            raw_payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        message = f"Local model request failed ({exc.response.status_code})"
+        try:
+            parsed = exc.response.json()
+            if isinstance(parsed, dict):
+                maybe_error = parsed.get("error")
+                if isinstance(maybe_error, str) and maybe_error.strip():
+                    message = maybe_error.strip()
+        except Exception:
+            pass
+        code = "local_model_not_found" if exc.response.status_code == 404 else "local_model_error"
+        status_code = 503 if exc.response.status_code in {404, 429, 500, 502, 503, 504} else 502
+        envelope = OpenAIErrorEnvelopeModel(
+            error=OpenAIError(
+                message=message,
+                type="server_error",
+                code=code,
+            )
+        )
+        latency_ms = int((time.monotonic() - started) * 1000)
+        await _write_local_request_log(
+            request_id=request_id,
+            model=model,
+            api_key=api_key,
+            status="error",
+            error_code=code,
+            error_message=message,
+            input_tokens=None,
+            output_tokens=None,
+            latency_ms=latency_ms,
+            reasoning_effort=payload.reasoning.effort if payload.reasoning else None,
+            service_tier=payload.service_tier,
+            transport=request_transport,
+        )
+        await _release_reservation(reservation)
+        return _local_error_execution(response_id=response_id, status_code=status_code, error_payload=envelope)
+    except Exception as exc:
+        message = str(exc) or "Local model unavailable"
+        envelope = OpenAIErrorEnvelopeModel(
+            error=OpenAIError(
+                message=message,
+                type="server_error",
+                code="local_model_unavailable",
+            )
+        )
+        latency_ms = int((time.monotonic() - started) * 1000)
+        await _write_local_request_log(
+            request_id=request_id,
+            model=model,
+            api_key=api_key,
+            status="error",
+            error_code="local_model_unavailable",
+            error_message=message,
+            input_tokens=None,
+            output_tokens=None,
+            latency_ms=latency_ms,
+            reasoning_effort=payload.reasoning.effort if payload.reasoning else None,
+            service_tier=payload.service_tier,
+            transport=request_transport,
+        )
+        await _release_reservation(reservation)
+        return _local_error_execution(response_id=response_id, status_code=503, error_payload=envelope)
+
+    if not isinstance(raw_payload, dict):
+        raw_payload = {}
+    text = raw_payload.get("response")
+    response_text = text if isinstance(text, str) else ""
+    input_tokens = int(raw_payload.get("prompt_eval_count") or 0)
+    output_tokens = int(raw_payload.get("eval_count") or 0)
+    response_payload_raw = _local_response_payload(
+        response_id=response_id,
+        model=model,
+        text=response_text,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
+    parsed_payload = parse_response_payload(response_payload_raw)
+    if parsed_payload is None:
+        parsed_payload = OpenAIResponsePayload.model_validate(response_payload_raw)
+
+    lines: list[str] = []
+    if response_text:
+        lines.append(format_sse_event({"type": "response.output_text.delta", "delta": response_text}))
+    lines.append(format_sse_event({"type": "response.completed", "response": response_payload_raw}))
+
+    latency_ms = int((time.monotonic() - started) * 1000)
+    await _write_local_request_log(
+        request_id=request_id,
+        model=model,
+        api_key=api_key,
+        status="success",
+        error_code=None,
+        error_message=None,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        latency_ms=latency_ms,
+        reasoning_effort=payload.reasoning.effort if payload.reasoning else None,
+        service_tier=payload.service_tier,
+        transport=request_transport,
+    )
+    await _finalize_local_reservation(
+        reservation,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        service_tier=payload.service_tier,
+    )
+
+    return _LocalResponseExecution(
+        lines=lines,
+        response_payload=parsed_payload,
+        error_payload=None,
+        status_code=200,
+    )
 
 
 def _logged_error_json_response(

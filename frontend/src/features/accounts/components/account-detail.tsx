@@ -33,8 +33,8 @@ export function AccountDetail({
 
   if (!account) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-12">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
+      <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12">
+        <div className="flex h-12 w-12 items-center justify-center rounded-md bg-muted">
           <User className="h-5 w-5 text-muted-foreground" />
         </div>
         <p className="mt-3 text-sm font-medium text-muted-foreground">Select an account</p>
@@ -52,9 +52,12 @@ export function AccountDetail({
   const idSuffix = showAccountId ? ` (${compactId})` : "";
 
   return (
-    <div key={account.accountId} className="animate-fade-in-up space-y-4 rounded-xl border bg-card p-5">
-      {/* Account header */}
+    <div key={account.accountId} className="animate-fade-in-up space-y-4 rounded-md border bg-card p-5">
       <div>
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+          <span>{account.planType}</span>
+          <span>Account detail</span>
+        </div>
         <h2 className="text-base font-semibold">
           {titleIsEmail ? <><span className={blurred ? "privacy-blur" : ""}>{title}</span>{idSuffix}</> : <>{title}{!emailSubtitle ? idSuffix : ""}</>}
         </h2>

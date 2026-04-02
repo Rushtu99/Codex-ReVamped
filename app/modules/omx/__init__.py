@@ -1,0 +1,2 @@
+"""OMX dashboard module."""
+

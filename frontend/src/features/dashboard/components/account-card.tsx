@@ -84,11 +84,14 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
   const idSuffix = showAccountId ? ` (${compactId})` : "";
 
   return (
-    <div className="card-hover rounded-xl border bg-card p-4">
-      {/* Header */}
+    <div className="card-hover rounded-md border bg-card px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-tight">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <span>{account.planType}</span>
+            {weeklyOnly ? <span>Weekly only</span> : null}
+          </div>
+          <p className="mt-1 truncate text-sm font-semibold leading-tight">
             {blurred
               ? <><span className="privacy-blur">{title}</span>{!emailSubtitle ? idSuffix : ""}</>
               : <>{title}{!emailSubtitle ? idSuffix : ""}</>}
@@ -102,19 +105,17 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
         <StatusBadge status={status} />
       </div>
 
-      {/* Quota bars */}
       <div className={cn("mt-3.5 grid gap-3", weeklyOnly ? "grid-cols-1" : "grid-cols-2")}>
         {!weeklyOnly && <QuotaBar label="5h" percent={primaryRemaining} resetLabel={primaryReset} />}
         <QuotaBar label="Weekly" percent={secondaryRemaining} resetLabel={secondaryReset} />
       </div>
 
-      {/* Actions */}
       <div className="mt-3 flex items-center gap-1.5 border-t pt-3">
         <Button
           type="button"
           size="sm"
           variant="ghost"
-          className="h-7 gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground"
+          className="h-7 gap-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground"
           onClick={() => onAction?.(account, "details")}
         >
           <ExternalLink className="h-3 w-3" />
@@ -125,7 +126,7 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
             type="button"
             size="sm"
             variant="ghost"
-            className="h-7 gap-1.5 rounded-lg text-xs text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+            className="h-7 gap-1.5 rounded-md text-xs text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
             onClick={() => onAction?.(account, "resume")}
           >
             <Play className="h-3 w-3" />
@@ -137,7 +138,7 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
             type="button"
             size="sm"
             variant="ghost"
-            className="h-7 gap-1.5 rounded-lg text-xs text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+            className="h-7 gap-1.5 rounded-md text-xs text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
             onClick={() => onAction?.(account, "reauth")}
           >
             <RotateCcw className="h-3 w-3" />

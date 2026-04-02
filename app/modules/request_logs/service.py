@@ -6,6 +6,7 @@ from datetime import datetime
 from app.modules.request_logs.mappers import (
     QUOTA_CODES,
     RATE_LIMIT_CODES,
+    infer_request_source,
     normalize_log_status,
     to_request_log_entry,
 )
@@ -32,6 +33,7 @@ class RequestLogFilterOptions:
     account_ids: list[str]
     model_options: list[RequestLogModelOption]
     statuses: list[str]
+    sources: list[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +59,12 @@ class RequestLogsService:
         models: list[str] | None = None,
         reasoning_efforts: list[str] | None = None,
         status: list[str] | None = None,
+        sources: list[str] | None = None,
     ) -> RequestLogsPage:
+        resolved_sources = _normalize_sources(sources)
+        if not resolved_sources:
+            return RequestLogsPage(requests=[], total=0, has_more=False)
+
         status_filter = _map_status_filter(status)
         normalized_model_options = (
             [(option.model, option.reasoning_effort) for option in model_options] if model_options else None
@@ -86,10 +93,12 @@ class RequestLogsService:
             )
             for log in logs
         ]
+        if resolved_sources != {"cloud", "local"}:
+            requests = [entry for entry in requests if infer_request_source(entry.model) in resolved_sources]
         return RequestLogsPage(
             requests=requests,
-            total=total,
-            has_more=offset + limit < total,
+            total=len(requests) if resolved_sources != {"cloud", "local"} else total,
+            has_more=(offset + limit < total) if resolved_sources == {"cloud", "local"} else False,
         )
 
     async def list_filter_options(
@@ -100,7 +109,17 @@ class RequestLogsService:
         model_options: list[RequestLogModelOption] | None = None,
         models: list[str] | None = None,
         reasoning_efforts: list[str] | None = None,
+        sources: list[str] | None = None,
     ) -> RequestLogFilterOptions:
+        resolved_sources = _normalize_sources(sources)
+        if not resolved_sources:
+            return RequestLogFilterOptions(
+                account_ids=[],
+                model_options=[],
+                statuses=[],
+                sources=[],
+            )
+
         normalized_model_options = (
             [(option.model, option.reasoning_effort) for option in model_options] if model_options else None
         )
@@ -119,7 +138,19 @@ class RequestLogsService:
                 for model, reasoning_effort in option_model_options
             ],
             statuses=_normalize_status_values(status_values),
+            sources=sorted(resolved_sources),
         )
+
+
+def _normalize_sources(sources: list[str] | None) -> set[str]:
+    supported = {"cloud", "local"}
+    if not sources:
+        return supported
+    normalized = {value.strip().lower() for value in sources if value and value.strip()}
+    if not normalized or "all" in normalized:
+        return supported
+    filtered = normalized & supported
+    return filtered
 
 
 def _map_status_filter(status: list[str] | None) -> RequestLogStatusFilter:

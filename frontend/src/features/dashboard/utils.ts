@@ -2,7 +2,11 @@ import { Activity, AlertTriangle, Coins, DollarSign } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { buildDonutPalette } from "@/utils/colors";
-import { buildDuplicateAccountIdSet, formatCompactAccountId } from "@/utils/account-identifiers";
+import {
+  buildDuplicateAccountIdSet,
+  formatAccountNickname,
+  formatCompactAccountId,
+} from "@/utils/account-identifiers";
 import {
   formatCachedTokensMeta,
   formatCompactNumber,
@@ -134,7 +138,7 @@ export function buildRemainingItems(
         return null;
       }
       const remaining = usageIndex.get(account.accountId) ?? 0;
-      const rawLabel = account.displayName || account.email || account.accountId;
+      const rawLabel = formatAccountNickname(account);
       const labelIsEmail = !!account.email && rawLabel === account.email;
       const labelSuffix = duplicateAccountIds.has(account.accountId)
         ? ` (${formatCompactAccountId(account.accountId, 5, 4)})`

@@ -11,11 +11,13 @@ export type RequestFiltersProps = {
   accountOptions: MultiSelectOption[];
   modelOptions: MultiSelectOption[];
   statusOptions: MultiSelectOption[];
+  sourceOptions: MultiSelectOption[];
   onSearchChange: (value: string) => void;
   onTimeframeChange: (value: FilterState["timeframe"]) => void;
   onAccountChange: (values: string[]) => void;
   onModelChange: (values: string[]) => void;
   onStatusChange: (values: string[]) => void;
+  onSourceChange: (values: string[]) => void;
   onReset: () => void;
 };
 
@@ -24,11 +26,13 @@ export function RequestFilters({
   accountOptions,
   modelOptions,
   statusOptions,
+  sourceOptions,
   onSearchChange,
   onTimeframeChange,
   onAccountChange,
   onModelChange,
   onStatusChange,
+  onSourceChange,
   onReset,
 }: RequestFiltersProps) {
   return (
@@ -65,6 +69,12 @@ export function RequestFilters({
           values={filters.statuses}
           options={statusOptions}
           onChange={onStatusChange}
+        />
+        <MultiSelectFilter
+          label="Source"
+          values={filters.sources}
+          options={sourceOptions}
+          onChange={onSourceChange}
         />
 
         <Button type="button" variant="ghost" size="sm" onClick={onReset} className="h-8 gap-1.5 text-xs text-muted-foreground">

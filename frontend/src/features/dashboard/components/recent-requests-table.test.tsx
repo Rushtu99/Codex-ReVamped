@@ -44,6 +44,7 @@ describe("RecentRequestsTable", () => {
             requestedServiceTier: "priority",
             actualServiceTier: "default",
             transport: "websocket",
+            source: "cloud",
             status: "rate_limit",
             errorCode: "rate_limit_exceeded",
             errorMessage: longError,
@@ -57,7 +58,7 @@ describe("RecentRequestsTable", () => {
       />,
     );
 
-    expect(screen.getByText("Primary Account")).toBeInTheDocument();
+    expect(screen.getByText("primary@example.com")).toBeInTheDocument();
     expect(screen.getByText("Key Alpha")).toBeInTheDocument();
     expect(screen.getByText("gpt-5.1 (high, default)")).toBeInTheDocument();
     expect(screen.getByText("Requested priority")).toBeInTheDocument();
@@ -93,6 +94,7 @@ describe("RecentRequestsTable", () => {
             requestedServiceTier: null,
             actualServiceTier: null,
             transport: null,
+            source: "cloud",
             status: "ok",
             errorCode: null,
             errorMessage: null,

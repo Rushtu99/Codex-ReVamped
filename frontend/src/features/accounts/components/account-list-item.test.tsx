@@ -13,7 +13,16 @@ describe("AccountListItem", () => {
       },
     });
 
-    render(<AccountListItem account={account} selected={false} onSelect={vi.fn()} />);
+    render(
+      <AccountListItem
+        account={account}
+        selected={false}
+        onSelect={vi.fn()}
+        onPause={vi.fn()}
+        onResume={vi.fn()}
+        onReauth={vi.fn()}
+      />,
+    );
 
     expect(screen.getByTestId("mini-quota-track")).toHaveClass("bg-muted");
     expect(screen.queryByTestId("mini-quota-fill")).not.toBeInTheDocument();
@@ -27,7 +36,16 @@ describe("AccountListItem", () => {
       },
     });
 
-    render(<AccountListItem account={account} selected={false} onSelect={vi.fn()} />);
+    render(
+      <AccountListItem
+        account={account}
+        selected={false}
+        onSelect={vi.fn()}
+        onPause={vi.fn()}
+        onResume={vi.fn()}
+        onReauth={vi.fn()}
+      />,
+    );
 
     expect(screen.getByTestId("mini-quota-fill")).toHaveStyle({ width: "73%" });
   });

@@ -23,7 +23,9 @@ from app.modules.dashboard import api as dashboard_api
 from app.modules.dashboard_auth import api as dashboard_auth_api
 from app.modules.firewall import api as firewall_api
 from app.modules.health import api as health_api
+from app.modules.local_models import api as local_models_api
 from app.modules.oauth import api as oauth_api
+from app.modules.omx import api as omx_api
 from app.modules.proxy import api as proxy_api
 from app.modules.proxy.rate_limit_cache import get_rate_limit_headers_cache
 from app.modules.request_logs import api as request_logs_api
@@ -81,6 +83,7 @@ def create_app() -> FastAPI:
     app.include_router(proxy_api.usage_router)
     app.include_router(accounts_api.router)
     app.include_router(dashboard_api.router)
+    app.include_router(local_models_api.router)
     app.include_router(usage_api.router)
     app.include_router(request_logs_api.router)
     app.include_router(oauth_api.router)
@@ -89,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(firewall_api.router)
     app.include_router(sticky_sessions_api.router)
     app.include_router(api_keys_api.router)
+    app.include_router(omx_api.router)
     app.include_router(health_api.router)
 
     static_dir = Path(__file__).parent / "static"
@@ -122,9 +126,14 @@ def create_app() -> FastAPI:
         if not index_html.is_file():
             raise HTTPException(status_code=503, detail=frontend_build_hint)
 
-        return FileResponse(index_html, media_type="text/html")
+        return FileResponse(
+            index_html,
+            media_type="text/html",
+            headers={"Cache-Control": "no-store, max-age=0, must-revalidate"},
+        )
 
     return app
 
 
 app = create_app()
+

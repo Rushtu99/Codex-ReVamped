@@ -1,0 +1,6 @@
+- [x] 1.1 Add OMX dashboard backend schemas for quick refs, sessions, workers, and token usage.
+- [x] 1.2 Implement `GET /api/omx/dashboard` aggregation from `.omx` state, logs, and team-job metadata.
+- [x] 1.3 Extend the OMX React tab to render quick skill references, live session/worker tables, token analytics, and allowlisted command controls.
+- [x] 1.4 Preserve existing OMX command-control behavior while wiring refresh to the new dashboard dataset and reasoning selector.
+- [x] 1.5 Add/update backend and frontend OMX integration tests for the new dashboard payload and UI sections.
+- [x] 1.6 Validate targeted test suites and OpenSpec artifacts with `uv run pytest tests/integration/test_omx_api.py`, `cd frontend && bun run test -- src/__integration__/omx-flow.test.tsx`, `cd frontend && bun run build`, and `openspec validate --specs`.

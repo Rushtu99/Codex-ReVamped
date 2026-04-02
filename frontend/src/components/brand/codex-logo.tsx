@@ -18,8 +18,14 @@ export function CodexLogo({ className, size = 32 }: CodexLogoProps) {
       <path
         stroke="currentColor"
         strokeLinecap="round"
-        strokeWidth="2.484"
-        d="M22.356 19.797H17.17M9.662 12.29l1.979 3.576a.511.511 0 0 1-.005.504l-1.974 3.409M30.758 16c0 8.15-6.607 14.758-14.758 14.758-8.15 0-14.758-6.607-14.758-14.758C1.242 7.85 7.85 1.242 16 1.242c8.15 0 14.758 6.608 14.758 14.758Z"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+        d="M10.25 9.75h11.5M10.25 22.25h11.5M8.75 14.75l3 3-3 3M23.25 14.25l-3 3 3 3"
+      />
+      <path
+        stroke="currentColor"
+        strokeWidth="2.2"
+        d="M30.1 16c0 7.786-6.314 14.1-14.1 14.1S1.9 23.786 1.9 16 8.214 1.9 16 1.9 30.1 8.214 30.1 16Z"
       />
     </svg>
   );

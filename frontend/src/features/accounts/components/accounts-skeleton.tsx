@@ -14,12 +14,26 @@ export function AccountsSkeleton() {
           <Skeleton className="h-8 flex-1 rounded-md" />
         </div>
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-2.5 rounded-lg px-3 py-2.5">
-            <div className="flex-1 space-y-1.5">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-20" />
+          <div key={i} className="w-full rounded-lg border bg-card px-3 py-2.5">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-12 rounded-md" />
+                </div>
+                <Skeleton className="h-3 w-40" />
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-10" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+                <Skeleton className="h-1 w-full rounded-full" />
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <Skeleton className="h-5 w-14 rounded-full" />
+                <Skeleton className="h-8 w-20 rounded-md" />
+              </div>
             </div>
-            <Skeleton className="h-5 w-14 rounded-full" />
           </div>
         ))}
       </div>

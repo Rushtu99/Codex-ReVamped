@@ -62,9 +62,22 @@ export const DepletionSchema = z.object({
   secondsUntilExhaustion: z.number().nullable().optional(),
 });
 
+export const RollingUsageWindowSchema = z.object({
+  requestCount: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative(),
+});
+
+export const AccountRollingUsageSchema = z.object({
+  last5m: RollingUsageWindowSchema,
+  last15m: RollingUsageWindowSchema,
+  last1h: RollingUsageWindowSchema,
+  last1d: RollingUsageWindowSchema,
+});
+
 export const DashboardOverviewSchema = z.object({
   lastSyncAt: z.string().datetime({ offset: true }).nullable(),
   accounts: z.array(AccountSummarySchema),
+  accountRollingUsage: z.record(z.string(), AccountRollingUsageSchema).default({}),
   summary: z.object({
     primaryWindow: UsageSummaryWindowSchema,
     secondaryWindow: UsageSummaryWindowSchema.nullable(),
@@ -88,6 +101,7 @@ export const RequestLogSchema = z.object({
   requestId: z.string(),
   model: z.string(),
   transport: z.string().nullable().optional().default(null),
+  source: z.string().default("cloud"),
   serviceTier: z.string().nullable().optional().default(null),
   requestedServiceTier: z.string().nullable().optional().default(null),
   actualServiceTier: z.string().nullable().optional().default(null),
@@ -116,6 +130,7 @@ export const RequestLogFilterOptionsSchema = z.object({
   accountIds: z.array(z.string()),
   modelOptions: z.array(RequestLogModelOptionSchema),
   statuses: z.array(z.string()),
+  sources: z.array(z.string()).default(["cloud"]),
 });
 
 export const FilterStateSchema = z.object({
@@ -124,6 +139,7 @@ export const FilterStateSchema = z.object({
   accountIds: z.array(z.string()),
   modelOptions: z.array(z.string()),
   statuses: z.array(z.string()),
+  sources: z.array(z.string()).default([]),
   limit: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
 });
@@ -138,3 +154,5 @@ export type RequestLogsResponse = z.infer<typeof RequestLogsResponseSchema>;
 export type RequestLogFilterOptions = z.infer<typeof RequestLogFilterOptionsSchema>;
 export type FilterState = z.infer<typeof FilterStateSchema>;
 export type Depletion = z.infer<typeof DepletionSchema>;
+export type RollingUsageWindow = z.infer<typeof RollingUsageWindowSchema>;
+export type AccountRollingUsage = z.infer<typeof AccountRollingUsageSchema>;

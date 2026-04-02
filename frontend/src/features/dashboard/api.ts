@@ -15,6 +15,7 @@ export type RequestLogsListFilters = {
   search?: string;
   accountIds?: string[];
   statuses?: string[];
+  sources?: string[];
   modelOptions?: string[];
   since?: string;
   until?: string;
@@ -25,6 +26,7 @@ export type RequestLogFacetFilters = {
   until?: string;
   accountIds?: string[];
   modelOptions?: string[];
+  sources?: string[];
 };
 
 function appendMany(params: URLSearchParams, key: string, values?: string[]): void {
@@ -55,6 +57,7 @@ export function getRequestLogs(params: RequestLogsListFilters = {}) {
   }
   appendMany(query, "accountId", params.accountIds);
   appendMany(query, "status", params.statuses);
+  appendMany(query, "source", params.sources);
   appendMany(query, "modelOption", params.modelOptions);
   if (params.since) {
     query.set("since", params.since);
@@ -75,6 +78,7 @@ export function getRequestLogOptions(params: RequestLogFacetFilters = {}) {
     query.set("until", params.until);
   }
   appendMany(query, "accountId", params.accountIds);
+  appendMany(query, "source", params.sources);
   appendMany(query, "modelOption", params.modelOptions);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   return get(`${REQUEST_LOGS_PATH}/options${suffix}`, RequestLogFilterOptionsSchema);

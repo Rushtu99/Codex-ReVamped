@@ -24,6 +24,10 @@ export type AccountListProps = {
   onSelect: (accountId: string) => void;
   onOpenImport: () => void;
   onOpenOauth: () => void;
+  onPause: (accountId: string) => void;
+  onResume: (accountId: string) => void;
+  onReauth: (accountId: string) => void;
+  busy?: boolean;
 };
 
 export function AccountList({
@@ -32,6 +36,10 @@ export function AccountList({
   onSelect,
   onOpenImport,
   onOpenOauth,
+  onPause,
+  onResume,
+  onReauth,
+  busy = false,
 }: AccountListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -58,6 +66,11 @@ export function AccountList({
 
   return (
     <div className="space-y-3">
+      <div className="rounded-md border bg-muted/30 px-3 py-2">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Directory</p>
+        <p className="mt-1 text-sm font-medium">{accounts.length} connected accounts</p>
+      </div>
+
       <div className="flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" aria-hidden />
@@ -108,9 +121,9 @@ export function AccountList({
 
       {helpOpen ? <WindowsOauthHelp /> : null}
 
-      <div className="max-h-[calc(100vh-16rem)] space-y-1 overflow-y-auto p-1">
+      <div className="max-h-[calc(100vh-16rem)] space-y-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-6 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-md border border-dashed p-6 text-center">
             <p className="text-sm font-medium text-muted-foreground">No matching accounts</p>
             <p className="text-xs text-muted-foreground/70">Try adjusting your filters.</p>
           </div>
@@ -122,6 +135,10 @@ export function AccountList({
               selected={account.accountId === selectedAccountId}
               showAccountId={duplicateAccountIds.has(account.accountId)}
               onSelect={onSelect}
+              onPause={onPause}
+              onResume={onResume}
+              onReauth={onReauth}
+              busy={busy}
             />
           ))
         )}

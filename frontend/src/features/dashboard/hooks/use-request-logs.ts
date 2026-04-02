@@ -16,6 +16,7 @@ const DEFAULT_FILTER_STATE: FilterState = {
   accountIds: [],
   modelOptions: [],
   statuses: [],
+  sources: [],
   limit: 25,
   offset: 0,
 };
@@ -35,6 +36,7 @@ function parseFilterState(params: URLSearchParams): FilterState {
     accountIds: params.getAll("accountId"),
     modelOptions: params.getAll("modelOption"),
     statuses: params.getAll("status"),
+    sources: params.getAll("source"),
     limit: parseNumber(params.get("limit"), DEFAULT_FILTER_STATE.limit),
     offset: parseNumber(params.get("offset"), DEFAULT_FILTER_STATE.offset),
   };
@@ -61,6 +63,9 @@ function writeFilterState(state: FilterState): URLSearchParams {
   }
   for (const value of state.statuses) {
     params.append("status", value);
+  }
+  for (const value of state.sources) {
+    params.append("source", value);
   }
   params.set("limit", String(state.limit));
   params.set("offset", String(state.offset));
@@ -92,6 +97,7 @@ export function useRequestLogs() {
       offset: filters.offset,
       accountIds: filters.accountIds,
       statuses: filters.statuses,
+      sources: filters.sources,
       modelOptions: filters.modelOptions,
       since,
     }),
@@ -102,8 +108,9 @@ export function useRequestLogs() {
       since,
       accountIds: filters.accountIds,
       modelOptions: filters.modelOptions,
+      sources: filters.sources,
     }),
-    [filters.accountIds, filters.modelOptions, since],
+    [filters.accountIds, filters.modelOptions, filters.sources, since],
   );
 
   const logsQuery = useQuery({

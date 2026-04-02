@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
+  { to: "/omx", label: "OMX" },
+  { to: "/local-models", label: "Local Models" },
   { to: "/accounts", label: "Accounts" },
   { to: "/settings", label: "Settings" },
 ] as const;
@@ -33,33 +35,32 @@ export function AppHeader({
   return (
     <header
       className={cn(
-        "sticky top-0 z-20 border-b border-white/[0.08] bg-background/50 px-4 py-2.5 shadow-[0_1px_12px_rgba(0,0,0,0.06)] backdrop-blur-xl backdrop-saturate-[1.8] supports-[backdrop-filter]:bg-background/40 dark:shadow-[0_1px_12px_rgba(0,0,0,0.25)]",
+        "sticky top-0 z-20 border-b bg-background/95 px-4 py-2.5 supports-[backdrop-filter]:bg-background/88 supports-[backdrop-filter]:backdrop-blur",
         className,
       )}
     >
       <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-4">
-        {/* Brand */}
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 to-primary/5">
-            <CodexLogo size={20} className="text-primary" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary">
+            <CodexLogo size={18} className="text-current" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold tracking-tight">Codex LB</p>
+            <p className="truncate text-sm font-semibold tracking-tight">CodexLB ReVamped</p>
+            <p className="truncate text-[11px] text-muted-foreground">Local balance control for your account pool</p>
           </div>
         </div>
 
-        {/* Desktop nav pills */}
-        <nav className="hidden items-center rounded-lg border border-border/50 bg-muted/40 p-0.5 sm:flex">
+        <nav className="hidden items-center gap-1 sm:flex">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  "relative inline-flex h-7 items-center rounded-md px-3.5 text-xs leading-none font-medium transition-colors duration-200",
+                  "relative inline-flex h-8 items-center rounded-md border px-3.5 text-xs leading-none font-medium transition-colors duration-150",
                   isActive
-                    ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "border-primary/35 bg-primary/12 text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/70 hover:text-foreground",
                 )
               }
             >
@@ -68,7 +69,6 @@ export function AppHeader({
           ))}
         </nav>
 
-        {/* Actions */}
         <div className="flex flex-1 items-center justify-end gap-1.5">
           <Button
             type="button"
@@ -76,7 +76,7 @@ export function AppHeader({
             variant="ghost"
             onClick={togglePrivacy}
             aria-label={blurred ? "Show emails" : "Hide emails"}
-            className="press-scale hidden h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground sm:inline-flex"
+            className="press-scale hidden h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground sm:inline-flex"
           >
             <PrivacyIcon className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
@@ -86,27 +86,26 @@ export function AppHeader({
               size="sm"
               variant="ghost"
               onClick={onLogout}
-              className="press-scale hidden h-8 gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground sm:inline-flex"
+              className="press-scale hidden h-8 gap-1.5 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground sm:inline-flex"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
               Logout
             </Button>
           )}
 
-          {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
-              <Button type="button" size="icon" variant="ghost" aria-label="Open menu" className="h-8 w-8 rounded-lg sm:hidden">
+              <Button type="button" size="icon" variant="ghost" aria-label="Open menu" className="h-8 w-8 rounded-md sm:hidden">
                 <Menu className="h-4 w-4" />
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-                    <CodexLogo size={16} className="text-primary" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary">
+                    <CodexLogo size={16} className="text-current" />
                   </div>
-                  <span className="text-sm font-semibold">Codex LB</span>
+                  <span className="text-sm font-semibold">CodexLB ReVamped</span>
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-0.5 px-4 pt-2">

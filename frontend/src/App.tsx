@@ -8,6 +8,8 @@ import { AuthGate } from "@/features/auth/components/auth-gate";
 import { useAuthStore } from "@/features/auth/hooks/use-auth";
 import { AccountsPage } from "@/features/accounts/components/accounts-page";
 import { DashboardPage } from "@/features/dashboard/components/dashboard-page";
+import { LocalModelsPage } from "@/features/local-models/components/local-models-page";
+import { OmxPage } from "@/features/omx/components/omx-page";
 import { SettingsPage } from "@/features/settings/components/settings-page";
 
 function AppLayout() {
@@ -15,7 +17,7 @@ function AppLayout() {
   const passwordRequired = useAuthStore((state) => state.passwordRequired);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background pb-10">
+    <div className="flex min-h-screen flex-col bg-background">
       <AppHeader
         onLogout={() => {
           void logout();
@@ -23,9 +25,9 @@ function AppLayout() {
         showLogout={passwordRequired}
       />
       <main className="mx-auto w-full max-w-[1500px] flex-1 px-4 py-8 sm:px-6">
+        <StatusBar />
         <Outlet />
       </main>
-      <StatusBar />
     </div>
   );
 }
@@ -39,6 +41,8 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/omx" element={<OmxPage />} />
+            <Route path="/local-models" element={<LocalModelsPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/firewall" element={<Navigate to="/settings" replace />} />

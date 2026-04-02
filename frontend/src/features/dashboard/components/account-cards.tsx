@@ -25,7 +25,7 @@ export function AccountCards({ accounts, onAction }: AccountCardsProps) {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3 xl:grid-cols-2">
       {accounts.map((account, index) => (
         <div key={account.accountId} className="animate-fade-in-up" style={{ animationDelay: `${index * 75}ms` }}>
           <AccountCard account={account} showAccountId={duplicateAccountIds.has(account.accountId)} onAction={onAction} />

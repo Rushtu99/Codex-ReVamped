@@ -23,6 +23,7 @@ describe("DashboardOverviewSchema", () => {
     const parsed = DashboardOverviewSchema.parse({
       lastSyncAt: ISO,
       accounts: [],
+      accountRollingUsage: {},
       summary: {
         primaryWindow: {
           remainingPercent: 80,
@@ -56,6 +57,47 @@ describe("DashboardOverviewSchema", () => {
     });
 
     expect(parsed.accounts).toHaveLength(0);
+  });
+
+  it("parses account rolling usage windows", () => {
+    const parsed = DashboardOverviewSchema.parse({
+      lastSyncAt: ISO,
+      accounts: [{ accountId: "acc-1", email: "one@example.com", displayName: "one@example.com", planType: "plus", status: "active" }],
+      accountRollingUsage: {
+        "acc-1": {
+          last5m: { requestCount: 1, totalTokens: 120 },
+          last15m: { requestCount: 2, totalTokens: 420 },
+          last1h: { requestCount: 3, totalTokens: 820 },
+          last1d: { requestCount: 9, totalTokens: 2100 },
+        },
+      },
+      summary: {
+        primaryWindow: {
+          remainingPercent: 80,
+          capacityCredits: 100,
+          remainingCredits: 80,
+          resetAt: ISO,
+          windowMinutes: 300,
+        },
+        secondaryWindow: null,
+        cost: {
+          currency: "USD",
+          totalUsd7d: 0,
+        },
+        metrics: null,
+      },
+      windows: {
+        primary: {
+          windowKey: "primary",
+          windowMinutes: 300,
+          accounts: [],
+        },
+        secondary: null,
+      },
+      trends: EMPTY_TRENDS,
+    });
+
+    expect(parsed.accountRollingUsage["acc-1"]?.last1d.requestCount).toBe(9);
   });
 
   it("drops legacy request_logs field from parse result", () => {

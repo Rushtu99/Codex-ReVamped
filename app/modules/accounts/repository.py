@@ -45,6 +45,7 @@ class AccountsRepository:
     async def list_request_usage_summary_by_account(
         self,
         account_ids: list[str] | None = None,
+        since: datetime | None = None,
     ) -> dict[str, AccountRequestUsageSummary]:
         summaries: dict[str, AccountRequestUsageSummary] = {}
         output_tokens_expr = func.coalesce(RequestLog.output_tokens, RequestLog.reasoning_tokens, 0)
@@ -58,6 +59,8 @@ class AccountsRepository:
         ).group_by(RequestLog.account_id)
         if account_ids:
             stmt = stmt.where(RequestLog.account_id.in_(account_ids))
+        if since is not None:
+            stmt = stmt.where(RequestLog.requested_at >= since)
 
         result = await self._session.execute(stmt)
         for (

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { AccountList } from "@/features/accounts/components/account-list";
+import { formatCompactAccountId } from "@/utils/account-identifiers";
 
 describe("AccountList", () => {
   it("renders items and filters by search", async () => {
@@ -33,6 +34,9 @@ describe("AccountList", () => {
         onSelect={onSelect}
         onOpenImport={() => {}}
         onOpenOauth={() => {}}
+        onPause={() => {}}
+        onResume={() => {}}
+        onReauth={() => {}}
       />,
     );
 
@@ -66,6 +70,9 @@ describe("AccountList", () => {
         onSelect={() => {}}
         onOpenImport={() => {}}
         onOpenOauth={() => {}}
+        onPause={() => {}}
+        onResume={() => {}}
+        onReauth={() => {}}
       />,
     );
 
@@ -106,12 +113,18 @@ describe("AccountList", () => {
         onSelect={() => {}}
         onOpenImport={() => {}}
         onOpenOauth={() => {}}
+        onPause={() => {}}
+        onResume={() => {}}
+        onReauth={() => {}}
       />,
     );
 
-    expect(screen.getByText((_content, el) => el?.tagName === "P" && !!el.textContent?.match(/dup@example\.com \| ID d48f0bfc\.\.\.12b5d5/))).toBeInTheDocument();
-    expect(screen.getByText((_content, el) => el?.tagName === "P" && !!el.textContent?.match(/dup@example\.com \| ID 7f9de2ad\.\.\.a95cee/))).toBeInTheDocument();
+    expect(screen.getByText("Duplicate A")).toBeInTheDocument();
+    expect(screen.getByText("Duplicate B")).toBeInTheDocument();
+    expect(screen.getAllByText("dup@example.com")).toHaveLength(2);
+    expect(screen.getByText(`ID ${formatCompactAccountId("d48f0bfc-8ea6-48a7-8d76-d0e5ef1816c5_6f12b5d5", 6, 4)}`)).toBeInTheDocument();
+    expect(screen.getByText(`ID ${formatCompactAccountId("7f9de2ad-7621-4a6f-88bc-ec7f3d914701_91a95cee", 6, 4)}`)).toBeInTheDocument();
     expect(screen.getByText("unique@example.com")).toBeInTheDocument();
-    expect(screen.queryByText((_content, el) => el?.tagName === "P" && !!el.textContent?.match(/unique@example\.com \| ID/))).not.toBeInTheDocument();
+    expect(screen.queryByText(/unique@example\.com \| ID/)).not.toBeInTheDocument();
   });
 });
