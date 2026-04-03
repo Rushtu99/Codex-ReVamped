@@ -1,0 +1,130 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import { AccountList } from "@/features/accounts/components/account-list";
+import { formatCompactAccountId } from "@/utils/account-identifiers";
+
+describe("AccountList", () => {
+  it("renders items and filters by search", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+
+    render(
+      <AccountList
+        accounts={[
+          {
+            accountId: "acc-1",
+            email: "primary@example.com",
+            displayName: "Primary",
+            planType: "plus",
+            status: "active",
+            additionalQuotas: [],
+          },
+          {
+            accountId: "acc-2",
+            email: "secondary@example.com",
+            displayName: "Secondary",
+            planType: "pro",
+            status: "paused",
+            additionalQuotas: [],
+          },
+        ]}
+        selectedAccountId="acc-1"
+        onSelect={onSelect}
+        onOpenImport={() => {}}
+        onOpenOauth={() => {}}
+        onPause={() => {}}
+        onResume={() => {}}
+        onReauth={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("primary@example.com")).toBeInTheDocument();
+    expect(screen.getByText("secondary@example.com")).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText("Search accounts..."), "secondary");
+    expect(screen.queryByText("primary@example.com")).not.toBeInTheDocument();
+    expect(screen.getByText("secondary@example.com")).toBeInTheDocument();
+
+    await user.click(screen.getByText("secondary@example.com"));
+    expect(onSelect).toHaveBeenCalledWith("acc-2");
+  });
+
+  it("shows empty state when no items match filter", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AccountList
+        accounts={[
+          {
+            accountId: "acc-1",
+            email: "primary@example.com",
+            displayName: "Primary",
+            planType: "plus",
+            status: "active",
+            additionalQuotas: [],
+          },
+        ]}
+        selectedAccountId={null}
+        onSelect={() => {}}
+        onOpenImport={() => {}}
+        onOpenOauth={() => {}}
+        onPause={() => {}}
+        onResume={() => {}}
+        onReauth={() => {}}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Search accounts..."), "not-found");
+    expect(screen.getByText("No matching accounts")).toBeInTheDocument();
+  });
+
+  it("shows account id only for duplicate emails", () => {
+    render(
+      <AccountList
+        accounts={[
+          {
+            accountId: "d48f0bfc-8ea6-48a7-8d76-d0e5ef1816c5_6f12b5d5",
+            email: "dup@example.com",
+            displayName: "Duplicate A",
+            planType: "plus",
+            status: "active",
+            additionalQuotas: [],
+          },
+          {
+            accountId: "7f9de2ad-7621-4a6f-88bc-ec7f3d914701_91a95cee",
+            email: "dup@example.com",
+            displayName: "Duplicate B",
+            planType: "plus",
+            status: "active",
+            additionalQuotas: [],
+          },
+          {
+            accountId: "acc-3",
+            email: "unique@example.com",
+            displayName: "Unique",
+            planType: "pro",
+            status: "active",
+            additionalQuotas: [],
+          },
+        ]}
+        selectedAccountId={null}
+        onSelect={() => {}}
+        onOpenImport={() => {}}
+        onOpenOauth={() => {}}
+        onPause={() => {}}
+        onResume={() => {}}
+        onReauth={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Duplicate A")).toBeInTheDocument();
+    expect(screen.getByText("Duplicate B")).toBeInTheDocument();
+    expect(screen.getAllByText("dup@example.com")).toHaveLength(2);
+    expect(screen.getByText(`ID ${formatCompactAccountId("d48f0bfc-8ea6-48a7-8d76-d0e5ef1816c5_6f12b5d5", 6, 4)}`)).toBeInTheDocument();
+    expect(screen.getByText(`ID ${formatCompactAccountId("7f9de2ad-7621-4a6f-88bc-ec7f3d914701_91a95cee", 6, 4)}`)).toBeInTheDocument();
+    expect(screen.getByText("unique@example.com")).toBeInTheDocument();
+    expect(screen.queryByText(/unique@example\.com \| ID/)).not.toBeInTheDocument();
+  });
+});
