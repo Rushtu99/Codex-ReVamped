@@ -4407,3 +4407,93 @@ async def test_transcribe_audio_maps_body_read_transport_errors_to_upstream_unav
     assert exc.status_code == 502
     assert exc.payload["error"]["code"] == "upstream_unavailable"
     assert exc.payload["error"]["message"] == expected_message
+
+
+def test_proxy_stream_optimizer_applies_window_distill_and_tool_filter(monkeypatch):
+    settings = SimpleNamespace(
+        proxy_context_window_enabled=True,
+        proxy_context_window_turns=2,
+        proxy_context_distill_enabled=True,
+        proxy_context_distill_provider="internal",
+        proxy_context_distill_min_chars=100,
+        proxy_context_distill_target_chars=40,
+        proxy_context_diff_enabled=False,
+        proxy_context_diff_fallback_ratio=0.9,
+        proxy_context_cache_max_chars=2000,
+        proxy_tools_filter_enabled=True,
+        proxy_tools_filter_patterns=["vercel", "deploy-to-vercel"],
+        proxy_tools_disable_all=False,
+    )
+    monkeypatch.setattr(proxy_service, "get_settings", lambda: settings)
+
+    payload = ResponsesRequest.model_validate(
+        {
+            "model": "gpt-5.4",
+            "instructions": "You are helpful.",
+            "stream": True,
+            "input": [
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": "first reply"},
+                {"role": "user", "content": "second"},
+                {"role": "assistant", "content": "second reply"},
+                {"role": "user", "content": "L" * 500},
+            ],
+            "tools": [
+                {"type": "function", "name": "deploy-to-vercel"},
+                {"type": "function", "name": "local_read_file"},
+            ],
+        }
+    )
+    service = proxy_service.ProxyService(_repo_factory(_RequestLogsRecorder()))
+    service._optimize_stream_payload(payload, {})
+
+    assert isinstance(payload.input, list)
+    assert len(payload.input) == 3
+    assert isinstance(payload.input[-1], dict)
+    assert "[distilled: omitted" in str(payload.input[-1].get("content"))
+    assert payload.tools == [{"type": "function", "name": "local_read_file"}]
+
+
+def test_proxy_stream_optimizer_uses_diff_when_context_key_present(monkeypatch):
+    settings = SimpleNamespace(
+        proxy_context_window_enabled=False,
+        proxy_context_window_turns=5,
+        proxy_context_distill_enabled=False,
+        proxy_context_distill_provider="internal",
+        proxy_context_distill_min_chars=12000,
+        proxy_context_distill_target_chars=4000,
+        proxy_context_diff_enabled=True,
+        proxy_context_diff_fallback_ratio=10.0,
+        proxy_context_cache_max_chars=2000,
+        proxy_tools_filter_enabled=False,
+        proxy_tools_filter_patterns=[],
+        proxy_tools_disable_all=False,
+    )
+    monkeypatch.setattr(proxy_service, "get_settings", lambda: settings)
+
+    service = proxy_service.ProxyService(_repo_factory(_RequestLogsRecorder()))
+    payload1 = ResponsesRequest.model_validate(
+        {
+            "model": "gpt-5.4",
+            "instructions": "You are helpful.",
+            "stream": True,
+            "prompt_cache_key": "thread-1",
+            "input": [{"role": "user", "content": "alpha\nbeta"}],
+        }
+    )
+    payload2 = ResponsesRequest.model_validate(
+        {
+            "model": "gpt-5.4",
+            "instructions": "You are helpful.",
+            "stream": True,
+            "prompt_cache_key": "thread-1",
+            "input": [{"role": "user", "content": "alpha\nbeta\ngamma"}],
+        }
+    )
+
+    service._optimize_stream_payload(payload1, {})
+    service._optimize_stream_payload(payload2, {})
+
+    assert isinstance(payload2.input, list)
+    assert isinstance(payload2.input[0], dict)
+    assert "[diff-only update]" in str(payload2.input[0].get("content"))

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import difflib
 import inspect
 import json
 import logging
+import subprocess
 import time
 from collections import deque
 from collections.abc import Sequence
@@ -147,6 +149,140 @@ class ProxyService:
         self._http_bridge_inflight_sessions: dict[_HTTPBridgeSessionKey, asyncio.Future[_HTTPBridgeSession]] = {}
         self._http_bridge_turn_state_index: dict[tuple[str, str | None], _HTTPBridgeSessionKey] = {}
         self._http_bridge_lock = anyio.Lock()
+        self._context_cache: dict[str, str] = {}
+
+    def _optimize_stream_payload(self, payload: ResponsesRequest, headers: Mapping[str, str]) -> None:
+        settings = get_settings()
+        self._apply_context_window(payload, settings=settings)
+        self._apply_input_distill_and_diff(payload, settings=settings, headers=headers)
+        self._apply_tools_filter(payload, settings=settings)
+
+    def _apply_context_window(self, payload: ResponsesRequest, *, settings: object) -> None:
+        if not getattr(settings, "proxy_context_window_enabled", False):
+            return
+        input_value = payload.input
+        if not isinstance(input_value, list):
+            return
+        turns = int(getattr(settings, "proxy_context_window_turns", 5) or 0)
+        if turns <= 0:
+            return
+        user_markers = [
+            idx
+            for idx, item in enumerate(input_value)
+            if isinstance(item, dict) and str(item.get("role") or "").lower() == "user"
+        ]
+        if len(user_markers) <= turns:
+            return
+        cutoff = user_markers[-turns]
+        preserved_prefix = [
+            item
+            for item in input_value[:cutoff]
+            if isinstance(item, dict) and str(item.get("role") or "").lower() in {"system", "developer"}
+        ]
+        payload.input = [*preserved_prefix, *input_value[cutoff:]]
+
+    def _apply_input_distill_and_diff(
+        self,
+        payload: ResponsesRequest,
+        *,
+        settings: object,
+        headers: Mapping[str, str],
+    ) -> None:
+        input_value = payload.input
+        if isinstance(input_value, str):
+            payload.input = self._optimize_large_text(input_value, payload, settings=settings, headers=headers)
+            return
+        if not isinstance(input_value, list):
+            return
+        optimized_items: list[JsonValue] = []
+        for item in input_value:
+            optimized_items.append(self._optimize_input_item(item, payload, settings=settings, headers=headers))
+        payload.input = optimized_items
+
+    def _optimize_input_item(
+        self,
+        item: JsonValue,
+        payload: ResponsesRequest,
+        *,
+        settings: object,
+        headers: Mapping[str, str],
+    ) -> JsonValue:
+        if isinstance(item, str):
+            return self._optimize_large_text(item, payload, settings=settings, headers=headers)
+        if not isinstance(item, dict):
+            return item
+
+        updated = dict(item)
+        content = updated.get("content")
+        if isinstance(content, str):
+            updated["content"] = self._optimize_large_text(content, payload, settings=settings, headers=headers)
+            return updated
+        if isinstance(content, list):
+            parts: list[JsonValue] = []
+            for part in content:
+                if not isinstance(part, dict):
+                    parts.append(part)
+                    continue
+                part_copy = dict(part)
+                text_value = part_copy.get("text")
+                if isinstance(text_value, str):
+                    part_copy["text"] = self._optimize_large_text(text_value, payload, settings=settings, headers=headers)
+                parts.append(part_copy)
+            updated["content"] = parts
+            return updated
+
+        text_value = updated.get("text")
+        if isinstance(text_value, str):
+            updated["text"] = self._optimize_large_text(text_value, payload, settings=settings, headers=headers)
+        return updated
+
+    def _optimize_large_text(
+        self,
+        text: str,
+        payload: ResponsesRequest,
+        *,
+        settings: object,
+        headers: Mapping[str, str],
+    ) -> str:
+        if not text:
+            return text
+        optimized = text
+        min_chars = int(getattr(settings, "proxy_context_distill_min_chars", 12_000) or 12_000)
+        if getattr(settings, "proxy_context_distill_enabled", False) and len(optimized) >= min_chars:
+            optimized = _distill_text_for_proxy(optimized, settings=settings)
+
+        if getattr(settings, "proxy_context_diff_enabled", False):
+            context_key = _context_key_for_diff(payload, headers=headers)
+            if context_key:
+                previous_text = self._context_cache.get(context_key)
+                if previous_text:
+                    diff_text = _render_proxy_diff(previous_text, optimized)
+                    if diff_text is not None:
+                        ratio = len(diff_text) / max(1, len(optimized))
+                        max_ratio = float(getattr(settings, "proxy_context_diff_fallback_ratio", 0.9) or 0.9)
+                        if ratio <= max_ratio:
+                            optimized = diff_text
+                max_chars = int(getattr(settings, "proxy_context_cache_max_chars", 24_000) or 24_000)
+                self._context_cache[context_key] = optimized[-max_chars:]
+        return optimized
+
+    def _apply_tools_filter(self, payload: ResponsesRequest, *, settings: object) -> None:
+        if getattr(settings, "proxy_tools_disable_all", False):
+            payload.tools = []
+            return
+        if not getattr(settings, "proxy_tools_filter_enabled", False):
+            return
+        patterns_raw = getattr(settings, "proxy_tools_filter_patterns", [])
+        patterns = [str(entry).lower() for entry in patterns_raw if isinstance(entry, str) and entry.strip()]
+        if not patterns:
+            return
+        filtered_tools: list[JsonValue] = []
+        for tool in payload.tools:
+            serialized = json.dumps(tool, ensure_ascii=True, sort_keys=True, separators=(",", ":")).lower()
+            if any(pattern in serialized for pattern in patterns):
+                continue
+            filtered_tools.append(tool)
+        payload.tools = filtered_tools
 
     def stream_responses(
         self,
@@ -161,6 +297,7 @@ class ProxyService:
         suppress_text_done_events: bool = False,
         request_transport: str = _REQUEST_TRANSPORT_HTTP,
     ) -> AsyncIterator[str]:
+        self._optimize_stream_payload(payload, headers)
         _maybe_log_proxy_request_payload("stream", payload, headers)
         filtered = filter_inbound_headers(headers)
         return self._stream_with_retry(
@@ -188,6 +325,7 @@ class ProxyService:
         suppress_text_done_events: bool = False,
         downstream_turn_state: str | None = None,
     ) -> AsyncIterator[str]:
+        self._optimize_stream_payload(payload, headers)
         _maybe_log_proxy_request_payload("stream_http", payload, headers)
         filtered = filter_inbound_headers(headers)
         return self._stream_http_bridge_or_retry(
@@ -4705,6 +4843,77 @@ def _tools_hash(payload: ResponsesRequest | ResponsesCompactRequest) -> str | No
         return None
     serialized = json.dumps(payload_tools, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return _hash_identifier(serialized)
+
+
+def _context_key_for_diff(payload: ResponsesRequest, *, headers: Mapping[str, str]) -> str | None:
+    prompt_cache_key = _prompt_cache_key_from_request_model(payload)
+    if isinstance(prompt_cache_key, str) and prompt_cache_key.strip():
+        return f"prompt:{prompt_cache_key.strip()}"
+    for key in ("x-codex-turn-state", "session_id"):
+        value = headers.get(key)
+        if isinstance(value, str) and value.strip():
+            return f"header:{key}:{value.strip()}"
+        for header_name, header_value in headers.items():
+            if header_name.lower() == key and isinstance(header_value, str) and header_value.strip():
+                return f"header:{key}:{header_value.strip()}"
+    return None
+
+
+def _distill_text_for_proxy(text: str, *, settings: object) -> str:
+    provider = getattr(settings, "proxy_context_distill_provider", "internal")
+    if provider == "distill_cli":
+        distilled = _distill_text_for_proxy_cli(text, settings=settings)
+        if distilled:
+            return distilled
+    target_chars = int(getattr(settings, "proxy_context_distill_target_chars", 4_000) or 4_000)
+    return _distill_text_for_proxy_internal(text, target_chars=target_chars)
+
+
+def _distill_text_for_proxy_cli(text: str, *, settings: object) -> str | None:
+    cli_bin = str(getattr(settings, "proxy_context_distill_cli_bin", "distill") or "distill")
+    timeout_seconds = float(getattr(settings, "proxy_context_distill_timeout_seconds", 5.0) or 5.0)
+    try:
+        result = subprocess.run(
+            [cli_bin],
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    output = result.stdout.strip()
+    return output or None
+
+
+def _distill_text_for_proxy_internal(text: str, *, target_chars: int) -> str:
+    if len(text) <= target_chars:
+        return text
+    target = max(300, target_chars)
+    edge = max(200, target // 3)
+    head = text[:edge].rstrip()
+    tail = text[-edge:].lstrip()
+    omitted = len(text) - len(head) - len(tail)
+    return f"{head}\n\n[distilled: omitted {omitted} chars]\n\n{tail}"
+
+
+def _render_proxy_diff(previous_text: str, current_text: str) -> str | None:
+    if not previous_text or not current_text:
+        return None
+    diff = difflib.unified_diff(
+        previous_text.splitlines(),
+        current_text.splitlines(),
+        fromfile="previous",
+        tofile="current",
+        lineterm="",
+    )
+    rendered = "\n".join(diff).strip()
+    if not rendered:
+        return None
+    return f"[diff-only update]\n{rendered}"
 
 
 def _interesting_header_keys(headers: Mapping[str, str]) -> list[str]:

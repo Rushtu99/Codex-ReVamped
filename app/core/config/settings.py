@@ -128,6 +128,22 @@ class Settings(BaseSettings):
     sessions_distill_target_chars: int = Field(default=4_000, gt=0)
     sessions_distill_cli_bin: str = "distill"
     sessions_distill_timeout_seconds: float = Field(default=5.0, gt=0)
+    proxy_context_window_enabled: bool = True
+    proxy_context_window_turns: int = Field(default=5, gt=0)
+    proxy_context_distill_enabled: bool = True
+    proxy_context_distill_provider: Literal["internal", "distill_cli"] = "internal"
+    proxy_context_distill_min_chars: int = Field(default=12_000, gt=0)
+    proxy_context_distill_target_chars: int = Field(default=4_000, gt=0)
+    proxy_context_distill_cli_bin: str = "distill"
+    proxy_context_distill_timeout_seconds: float = Field(default=5.0, gt=0)
+    proxy_context_diff_enabled: bool = True
+    proxy_context_diff_fallback_ratio: float = Field(default=0.9, gt=0, le=1.0)
+    proxy_context_cache_max_chars: int = Field(default=24_000, gt=0)
+    proxy_tools_filter_enabled: bool = True
+    proxy_tools_filter_patterns: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["vercel", "deploy-to-vercel", "build-web-apps:deploy-to-vercel"]
+    )
+    proxy_tools_disable_all: bool = False
 
     @field_validator("database_url")
     @classmethod
@@ -174,6 +190,24 @@ class Settings(BaseSettings):
                         normalized.append(host)
             return normalized
         raise TypeError("image_inline_allowed_hosts must be a list or comma-separated string")
+
+    @field_validator("proxy_tools_filter_patterns", mode="before")
+    @classmethod
+    def _normalize_proxy_tools_filter_patterns(cls, value: object) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            entries = [entry.strip().lower() for entry in value.split(",")]
+            return [entry for entry in entries if entry]
+        if isinstance(value, list):
+            normalized: list[str] = []
+            for entry in value:
+                if isinstance(entry, str):
+                    pattern = entry.strip().lower()
+                    if pattern:
+                        normalized.append(pattern)
+            return normalized
+        raise TypeError("proxy_tools_filter_patterns must be a list or comma-separated string")
 
     @field_validator("firewall_trusted_proxy_cidrs", mode="before")
     @classmethod
