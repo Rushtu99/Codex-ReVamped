@@ -112,6 +112,22 @@ class Settings(BaseSettings):
     firewall_trusted_proxy_cidrs: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["127.0.0.1/32", "::1/128"]
     )
+    sessions_enabled: bool = False
+    sessions_interactive_enabled: bool = False
+    sessions_codex_home: Path = Field(default_factory=lambda: Path.home() / ".codex")
+    sessions_codex_cli_bin: str = "codex"
+    sessions_app_server_idle_ttl_seconds: float = Field(default=900.0, gt=0)
+    sessions_recent_event_limit: int = Field(default=200, gt=0)
+    sessions_max_prompt_chars: int = Field(default=16_000, gt=0)
+    sessions_context_window_turns: int = Field(default=5, gt=0)
+    sessions_diff_enabled: bool = True
+    sessions_diff_fallback_ratio: float = Field(default=0.9, gt=0, le=1.0)
+    sessions_distill_enabled: bool = True
+    sessions_distill_provider: Literal["internal", "distill_cli"] = "internal"
+    sessions_distill_min_chars: int = Field(default=12_000, gt=0)
+    sessions_distill_target_chars: int = Field(default=4_000, gt=0)
+    sessions_distill_cli_bin: str = "distill"
+    sessions_distill_timeout_seconds: float = Field(default=5.0, gt=0)
 
     @field_validator("database_url")
     @classmethod
@@ -131,6 +147,15 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return Path(value).expanduser()
         raise TypeError("encryption_key_file must be a path")
+
+    @field_validator("sessions_codex_home", mode="before")
+    @classmethod
+    def _expand_sessions_codex_home(cls, value: str | Path) -> Path:
+        if isinstance(value, Path):
+            return value.expanduser()
+        if isinstance(value, str):
+            return Path(value).expanduser()
+        raise TypeError("sessions_codex_home must be a path")
 
     @field_validator("image_inline_allowed_hosts", mode="before")
     @classmethod
